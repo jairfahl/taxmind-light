@@ -51,7 +51,7 @@ def test_analyze_query_sem_contexto_tributario():
 
 
 # -----------------------------------------------------------------------
-# 3. GET /v1/health → 200 + contagens corretas
+# 3. GET /v1/health → 200 + contagens + lista de normas
 # -----------------------------------------------------------------------
 def test_health_ok():
     resp = client.get("/v1/health")
@@ -61,6 +61,52 @@ def test_health_ok():
     assert data["chunks_total"] > 0
     assert data["embeddings_total"] > 0
     assert data["chunks_total"] == data["embeddings_total"]
+    # Novo campo: lista de normas
+    assert "normas" in data
+    assert isinstance(data["normas"], list)
+    assert len(data["normas"]) >= 3
+    assert all("codigo" in n and "nome" in n for n in data["normas"])
+
+
+# -----------------------------------------------------------------------
+# 4. POST /v1/ingest/upload com PDF válido → 200 + chunks > 0
+# -----------------------------------------------------------------------
+def test_ingest_upload_pdf_valido():
+    # Cria um PDF mínimo in-memory com texto tributário
+    import io
+    # PDF mínimo válido com texto extraível via reportlab ou bytes raw
+    # Usamos um PDF gerado via fpdf2 (instalado como dep do pdfplumber)
+    try:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=12)
+        pdf.cell(0, 10, "Art. 1o Este manual trata do regime de apuracao do IBS e CBS.")
+        pdf.cell(0, 10, "Art. 2o A aliquota de referencia sera fixada pelo CGIBS.")
+        pdf_bytes = pdf.output()
+    except ImportError:
+        pytest.skip("fpdf2 não instalado — pulando teste de upload")
+
+    time.sleep(25)  # rate limit voyage
+    resp = client.post(
+        "/v1/ingest/upload",
+        files={"file": ("manual_teste.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        data={"nome": "Manual Teste Sprint2", "tipo": "Manual"},
+    )
+    assert resp.status_code == 200, f"Upload falhou: {resp.text[:300]}"
+    data = resp.json()
+    assert data["chunks"] > 0
+    assert "norma_id" in data
+    assert data["nome"] == "Manual Teste Sprint2"
+
+
+def test_ingest_upload_arquivo_nao_pdf():
+    resp = client.post(
+        "/v1/ingest/upload",
+        files={"file": ("doc.txt", b"conteudo texto", "text/plain")},
+        data={"nome": "Teste TXT", "tipo": "Outro"},
+    )
+    assert resp.status_code == 400
 
 
 # -----------------------------------------------------------------------

@@ -67,7 +67,7 @@ avaliacoes   -- validação manual de qualidade
 ## Estado Atual
 
 - [x] Sprint 1 — KB + RAG funcional ✅ (1596 embeddings, 9/10 validação)
-- [ ] Sprint 2 — Motor Cognitivo + FastAPI + Streamlit
+- [ ] Sprint 2 — Motor Cognitivo + FastAPI + Streamlit + Upload
 - [ ] Sprint 3 — Protocolo P1→P9 + testes adversariais
 
 ---

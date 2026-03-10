@@ -1,22 +1,29 @@
 """
-api/main.py — FastAPI: 3 endpoints do motor cognitivo TaxMind Light.
+api/main.py — FastAPI: 4 endpoints do motor cognitivo TaxMind Light.
 
-POST /v1/analyze  — análise tributária completa
-GET  /v1/chunks   — busca RAG direta
-GET  /v1/health   — status do sistema
+POST /v1/analyze        — análise tributária completa
+GET  /v1/chunks         — busca RAG direta
+GET  /v1/health         — status do sistema (com lista de normas)
+POST /v1/ingest/upload  — ingestão de PDF adicional
 """
 
 import logging
 import os
+import re
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.cognitive.engine import MODEL_DEV, AnaliseResult, analisar
+from src.ingest.chunker import chunkar_documento
+from src.ingest.embedder import gerar_e_persistir_embeddings
+from src.ingest.loader import DocumentoNorma, extrair_texto_pdf
 from src.quality.engine import QualidadeStatus
 from src.rag.retriever import ChunkResultado, retrieve
 
@@ -156,7 +163,7 @@ async def get_chunks(
 
 @app.get("/v1/health")
 async def health():
-    """Status do sistema com contagens do banco."""
+    """Status do sistema com contagens e lista de normas disponíveis."""
     try:
         url = os.getenv("DATABASE_URL")
         conn = psycopg2.connect(url)
@@ -165,6 +172,8 @@ async def health():
         chunks_total = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM embeddings")
         embeddings_total = cur.fetchone()[0]
+        cur.execute("SELECT codigo, nome FROM normas WHERE vigente = TRUE ORDER BY ano, codigo")
+        normas = [{"codigo": r[0], "nome": r[1]} for r in cur.fetchall()]
         cur.close()
         conn.close()
     except Exception as e:
@@ -174,4 +183,109 @@ async def health():
         "status": "ok",
         "chunks_total": chunks_total,
         "embeddings_total": embeddings_total,
+        "normas": normas,
+    }
+
+
+@app.post("/v1/ingest/upload")
+async def ingest_upload(
+    file: UploadFile = File(..., description="Arquivo PDF a ingerir"),
+    nome: str = Form(..., description="Nome do documento (ex: IN RFB 2184/2024)"),
+    tipo: str = Form(..., description="Tipo: IN | Resolucao | Parecer | Manual | Outro"),
+):
+    """
+    Ingestão de PDF adicional (INs, Resoluções, Pareceres, Manuais).
+    O PDF é processado em /tmp e não é persistido no disco após ingestão.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos")
+
+    logger.info("POST /v1/ingest/upload nome=%s tipo=%s", nome, tipo)
+
+    # Gerar código único a partir do nome
+    codigo = re.sub(r"[^A-Za-z0-9]", "_", nome)[:30].strip("_")
+
+    conteudo = await file.read()
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
+            tmp.write(conteudo)
+            tmp.flush()
+            tmp_path = Path(tmp.name)
+
+            # Extrair texto
+            texto = extrair_texto_pdf(tmp_path)
+            if not texto.strip():
+                raise HTTPException(status_code=400, detail="PDF sem texto extraível (pode ser imagem)")
+
+            doc = DocumentoNorma(
+                codigo=codigo,
+                nome=nome,
+                tipo=tipo,
+                numero="0",
+                ano=2024,
+                arquivo=file.filename,
+                texto=texto,
+            )
+
+            # Persistir norma + chunks + embeddings
+            url = os.getenv("DATABASE_URL")
+            conn = psycopg2.connect(url)
+            cur = conn.cursor()
+
+            cur.execute(
+                """
+                INSERT INTO normas (codigo, nome, tipo, numero, ano, arquivo)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (codigo) DO UPDATE SET
+                    nome = EXCLUDED.nome, arquivo = EXCLUDED.arquivo, vigente = TRUE
+                RETURNING id
+                """,
+                (doc.codigo, doc.nome, doc.tipo, doc.numero, doc.ano, doc.arquivo),
+            )
+            norma_id = cur.fetchone()[0]
+            conn.commit()
+
+            chunks = chunkar_documento(doc.texto)
+
+            chunk_ids: list[int] = []
+            for chunk in chunks:
+                cur.execute(
+                    """
+                    INSERT INTO chunks (norma_id, chunk_index, texto, artigo, secao, titulo, tokens)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (norma_id, chunk_index) DO NOTHING
+                    RETURNING id
+                    """,
+                    (norma_id, chunk.chunk_index, chunk.texto, chunk.artigo,
+                     chunk.secao, chunk.titulo, chunk.tokens),
+                )
+                row = cur.fetchone()
+                if row:
+                    chunk_ids.append(row[0])
+                else:
+                    cur.execute(
+                        "SELECT id FROM chunks WHERE norma_id=%s AND chunk_index=%s",
+                        (norma_id, chunk.chunk_index),
+                    )
+                    chunk_ids.append(cur.fetchone()[0])
+            conn.commit()
+
+            n_emb = gerar_e_persistir_embeddings(conn, chunk_ids, chunks)
+            cur.close()
+            conn.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Erro em /v1/ingest/upload: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    logger.info("Upload ingerido: %s | chunks=%d | embeddings=%d", nome, len(chunks), n_emb)
+    return {
+        "norma_id": norma_id,
+        "nome": nome,
+        "codigo": codigo,
+        "chunks": len(chunks),
+        "embeddings": n_emb,
     }
