@@ -406,4 +406,12 @@ def analisar(
     conn.close()
     logger.info("Análise concluída: status=%s score=%s latência=%dms flags=%s",
                 qualidade.status, dados.get("scoring_confianca"), latencia_ms, all_flags)
+
+    # Observability — não propaga exceções
+    try:
+        from src.observability.collector import MetricsCollector
+        MetricsCollector().registrar_interacao(resultado, query)
+    except Exception as _obs_err:
+        logger.debug("MetricsCollector ignorado: %s", _obs_err)
+
     return resultado

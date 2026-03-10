@@ -68,8 +68,8 @@ carimbo_alerts    -- alertas de terceirização cognitiva (Sprint 3)
 | 1 | KB + RAG (1596 embeddings) | ✅ Concluída |
 | 2 | Motor Cognitivo + FastAPI + Streamlit + Upload | ✅ Concluída |
 | 3 | Protocolo P1→P9 + Detector de Carimbo + Testes adversariais | ✅ Concluída |
-| 4 | Outputs Acionáveis — 5 classes + stakeholders + materialidade | ← ATUAL |
-| 5 | Observability de IA — drift + métricas + regression testing | Pendente |
+| 4 | Outputs Acionáveis — 5 classes + stakeholders + materialidade | ✅ Concluída |
+| 5 | Observability de IA — métricas + drift + regression testing | ← ATUAL |
 
 ---
 
@@ -79,7 +79,18 @@ carimbo_alerts    -- alertas de terceirização cognitiva (Sprint 3)
 - [x] Sprint 2 ✅
 - [x] Sprint 3 ✅ (49/49 testes, 6/6 adversariais)
 - [x] Sprint 4 ✅ (107/107 testes, 5 classes + stakeholders + materialidade, suite unitária: 45s)
-- [ ] Sprint 5 — Observability de IA
+- [x] Sprint 5 ✅ (137/137 testes, MetricsCollector + DriftDetector 2σ + RegressionRunner + 5 endpoints + Aba 5 UI)
+
+---
+
+## REGRA PERMANENTE — Testes
+
+```
+Testes unitários NUNCA fazem chamadas externas (LLM, embeddings, banco real).
+Mockar SEMPRE: CognitiveEngine.analisar(), get_embedding(), MaterialidadeCalculator.calcular()
+Testes que exigem chamada real ficam em tests/e2e/ e rodam MANUALMENTE.
+conftest.py com autouse=True para todos os mocks de API externa.
+```
 
 ---
 

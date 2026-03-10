@@ -68,7 +68,7 @@ except Exception:
     st.sidebar.error("API offline — certifique-se que o servidor FastAPI está rodando")
 
 # --- Abas ---
-aba1, aba2, aba3, aba4 = st.tabs(["Consultar", "Carregar Documento", "Protocolo P1→P9", "Outputs"])
+aba1, aba2, aba3, aba4, aba5 = st.tabs(["Consultar", "Carregar Documento", "Protocolo P1→P9", "Outputs", "Observability"])
 
 
 # ===========================================================================
@@ -671,3 +671,193 @@ with aba4:
                                                         st.error(rc5.json().get("detail", rc5.text[:200]))
                                                 except httpx.ConnectError:
                                                     st.error("API offline.")
+
+
+# ===========================================================================
+# ABA 5 — Observability de IA
+# ===========================================================================
+MODEL_DEV_UI = "claude-haiku-4-5-20251001"
+PROMPT_VERSION_UI = "v1.0.0-sprint2"
+
+THRESHOLD_LABELS = {
+    "precisao_citacao":      ("≥ 90%", 0.90, True),
+    "taxa_alucinacao":       ("≤ 5%",  0.05, False),
+    "acuracia_recomendacao": ("≥ 80%", 0.80, True),
+    "latencia_p95":          ("≤ 15s", 15.0, True),
+    "cobertura_contra_tese": ("≥ 80%", 0.80, True),
+}
+
+with aba5:
+    st.title("Observability de IA")
+    st.caption("Métricas contínuas, detecção de drift e regression testing do TaxMind Light.")
+
+    # ------ Linha 1 — KPIs ------
+    st.subheader("KPIs — Últimos 7 dias")
+    try:
+        rm = httpx.get(f"{API_BASE}/v1/observability/metrics", params={"days": 7}, timeout=5)
+        resumo = rm.json().get("resumo", {}) if rm.status_code == 200 else {}
+    except Exception:
+        resumo = {}
+
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    with kpi1:
+        val = resumo.get("taxa_alucinacao")
+        st.metric("Taxa Alucinação", f"{val*100:.1f}%" if val is not None else "—",
+                  delta=None, help="Proxy: % interações com anti-alucinação bloqueado")
+    with kpi2:
+        val = resumo.get("p95_latencia_ms")
+        st.metric("Latência p95", f"{val/1000:.1f}s" if val is not None else "—")
+    with kpi3:
+        val = resumo.get("pct_scoring_alto")
+        st.metric("% Scoring Alto", f"{val*100:.1f}%" if val is not None else "—")
+    with kpi4:
+        val = resumo.get("total_interacoes")
+        st.metric("Total Interações", str(val) if val is not None else "0")
+
+    st.divider()
+
+    # ------ Linha 2 — Gráficos ------
+    col_g1, col_g2 = st.columns(2)
+
+    with col_g1:
+        st.subheader("Latência (30 dias)")
+        try:
+            rm30 = httpx.get(f"{API_BASE}/v1/observability/metrics", params={"days": 30}, timeout=5)
+            metrics_list = rm30.json().get("metrics", []) if rm30.status_code == 200 else []
+        except Exception:
+            metrics_list = []
+
+        if metrics_list:
+            import json as _json
+            datas = [m["data_referencia"] for m in metrics_list]
+            lat_avg = [m.get("avg_latencia_ms") for m in metrics_list]
+            lat_p95 = [m.get("p95_latencia_ms") for m in metrics_list]
+            st.line_chart({"p50/avg": [v for v in lat_avg if v],
+                           "p95": [v for v in lat_p95 if v]})
+        else:
+            st.info("Sem dados de latência disponíveis.")
+
+    with col_g2:
+        st.subheader("Taxa de Bloqueio por Mecanismo")
+        if metrics_list:
+            mecanismos = {}
+            for key in ("taxa_bloqueio_m1", "taxa_bloqueio_m2", "taxa_bloqueio_m3", "taxa_bloqueio_m4"):
+                vals = [m.get(key) for m in metrics_list if m.get(key) is not None]
+                mecanismos[key.replace("taxa_bloqueio_", "").upper()] = sum(vals)/len(vals) if vals else 0
+            st.bar_chart(mecanismos)
+        else:
+            st.info("Sem dados de bloqueio disponíveis.")
+
+    st.divider()
+
+    # ------ Linha 3 — Drift Alerts ------
+    st.subheader("Drift Alerts Ativos")
+    col_d1, col_d2 = st.columns([3, 1])
+    with col_d2:
+        pv_drift = st.text_input("prompt_version (drift)", value=PROMPT_VERSION_UI, key="pv_drift")
+        refresh_drift = st.button("Atualizar Alerts")
+
+    try:
+        rd = httpx.get(f"{API_BASE}/v1/observability/drift",
+                       params={"prompt_version": pv_drift}, timeout=5)
+        drift_alerts = rd.json() if rd.status_code == 200 else []
+    except Exception:
+        drift_alerts = []
+
+    if not drift_alerts:
+        st.success("Nenhum drift alert ativo.")
+    else:
+        st.warning(f"⚠️ {len(drift_alerts)} alert(s) ativo(s)")
+        for alert in drift_alerts:
+            with st.expander(f"🔔 {alert['metrica']} — {float(alert['desvios_padrao']):.2f}σ"):
+                st.write(f"**Baseline:** {float(alert['valor_baseline']):.4f} → **Atual:** {float(alert['valor_atual']):.4f}")
+                st.caption(f"Detectado em: {str(alert.get('detectado_em',''))[:19]}")
+                with st.form(f"form_resolve_{alert['id']}"):
+                    obs = st.text_input("Observação de resolução")
+                    if st.form_submit_button("✅ Resolver"):
+                        try:
+                            rr = httpx.post(
+                                f"{API_BASE}/v1/observability/drift/{alert['id']}/resolver",
+                                json={"observacao": obs or "Resolvido via dashboard"},
+                                timeout=5,
+                            )
+                            if rr.status_code == 200:
+                                st.success("Resolvido!")
+                                st.rerun()
+                            else:
+                                st.error(rr.text[:200])
+                        except httpx.ConnectError:
+                            st.error("API offline.")
+
+    st.divider()
+
+    # ------ Linha 4 — Regression Testing ------
+    st.subheader("Regression Testing")
+    with st.form("form_regression"):
+        col_r1, col_r2, col_r3 = st.columns(3)
+        with col_r1:
+            pv_reg = st.text_input("prompt_version", value=PROMPT_VERSION_UI)
+        with col_r2:
+            mid_reg = st.text_input("model_id", value=MODEL_DEV_UI)
+        with col_r3:
+            bv_reg = st.text_input("baseline_version", value=PROMPT_VERSION_UI)
+        run_reg = st.form_submit_button("▶ Executar Regression", type="primary")
+        st.caption("⚠️ Faz chamadas reais ao LLM — pode levar até 2 minutos.")
+
+    if run_reg:
+        with st.spinner("Executando regression testing (5 casos)..."):
+            try:
+                rr = httpx.post(
+                    f"{API_BASE}/v1/observability/regression",
+                    json={"prompt_version": pv_reg, "model_id": mid_reg, "baseline_version": bv_reg},
+                    timeout=180,
+                )
+            except httpx.ConnectError:
+                st.error("API offline.")
+                rr = None
+
+        if rr is not None and rr.status_code == 200:
+            res = rr.json()
+            badge = "🟢 APROVADO" if res["aprovado"] else "🔴 REPROVADO"
+            st.markdown(f"### {badge}")
+            metricas_res = [
+                ("Precisão Citação", res["precisao_citacao"], "≥ 90%", res["precisao_citacao"] >= 0.90),
+                ("Taxa Alucinação", res["taxa_alucinacao"], "≤ 5%", res["taxa_alucinacao"] <= 0.05),
+                ("Acurácia Recomendação", res["acuracia_recomendacao"], "≥ 80%", res["acuracia_recomendacao"] >= 0.80),
+                ("Latência p95 (s)", res["latencia_p95"], "≤ 15s", res["latencia_p95"] <= 15.0),
+                ("Cobertura Contra-tese", res["cobertura_contra_tese"], "≥ 80%", res["cobertura_contra_tese"] >= 0.80),
+            ]
+            for nome, valor, threshold, ok in metricas_res:
+                icon = "✅" if ok else "❌"
+                st.write(f"{icon} **{nome}**: {valor:.2%} (threshold: {threshold})" if "%" not in threshold or "s" not in threshold else f"{icon} **{nome}**: {valor:.2f} (threshold: {threshold})")
+        elif rr is not None:
+            st.error(f"Erro: {rr.text[:300]}")
+
+    st.divider()
+
+    # ------ Linha 5 — Baseline Management ------
+    st.subheader("Gestão de Baseline")
+    with st.form("form_baseline"):
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            pv_base = st.text_input("prompt_version", value=PROMPT_VERSION_UI, key="pv_base")
+        with col_b2:
+            mid_base = st.text_input("model_id", value=MODEL_DEV_UI, key="mid_base")
+        reg_base = st.form_submit_button("📊 Registrar Baseline", type="primary")
+
+    if reg_base:
+        try:
+            rb = httpx.post(
+                f"{API_BASE}/v1/observability/baseline",
+                json={"prompt_version": pv_base, "model_id": mid_base},
+                timeout=10,
+            )
+            if rb.status_code == 201:
+                d = rb.json()
+                st.success(f"Baseline registrado — sample_size={d.get('sample_size', '?')}")
+                st.json({k: round(v, 4) if isinstance(v, float) else v
+                         for k, v in d.items() if v is not None})
+            else:
+                st.error(rb.json().get("detail", rb.text[:200]))
+        except httpx.ConnectError:
+            st.error("API offline.")

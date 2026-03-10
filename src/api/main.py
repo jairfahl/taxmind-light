@@ -1,18 +1,23 @@
 """
-api/main.py — FastAPI: 12 endpoints do motor cognitivo TaxMind Light.
+api/main.py — FastAPI: 17 endpoints do motor cognitivo TaxMind Light.
 
-POST /v1/analyze                          — análise tributária completa
-GET  /v1/chunks                           — busca RAG direta
-GET  /v1/health                           — status do sistema
-POST /v1/ingest/upload                    — ingestão de PDF adicional
-POST /v1/cases                            — criar caso protocolo
-GET  /v1/cases/{case_id}                  — estado do caso
-POST /v1/cases/{case_id}/steps/{passo}    — submeter passo
-POST /v1/cases/{case_id}/carimbo/confirmar — confirmar alerta carimbo
-POST /v1/outputs                          — gerar output acionável
-GET  /v1/outputs/{output_id}              — detalhe do output
-POST /v1/outputs/{output_id}/aprovar      — aprovar output
-GET  /v1/cases/{case_id}/outputs          — listar outputs do caso
+POST /v1/analyze                                  — análise tributária completa
+GET  /v1/chunks                                   — busca RAG direta
+GET  /v1/health                                   — status do sistema
+POST /v1/ingest/upload                            — ingestão de PDF adicional
+POST /v1/cases                                    — criar caso protocolo
+GET  /v1/cases/{case_id}                          — estado do caso
+POST /v1/cases/{case_id}/steps/{passo}            — submeter passo
+POST /v1/cases/{case_id}/carimbo/confirmar        — confirmar alerta carimbo
+POST /v1/outputs                                  — gerar output acionável
+GET  /v1/outputs/{output_id}                      — detalhe do output
+POST /v1/outputs/{output_id}/aprovar              — aprovar output
+GET  /v1/cases/{case_id}/outputs                  — listar outputs do caso
+GET  /v1/observability/metrics                    — métricas diárias agregadas
+GET  /v1/observability/drift                      — drift alerts ativos
+POST /v1/observability/drift/{alert_id}/resolver  — resolver drift alert
+POST /v1/observability/baseline                   — registrar baseline
+POST /v1/observability/regression                 — executar regression testing
 """
 
 import logging
@@ -655,3 +660,178 @@ async def listar_outputs_caso(case_id: int):
         logger.error("Erro em GET /v1/cases/%d/outputs: %s", case_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     return [_output_result_to_dict(r) for r in outputs]
+
+
+# ---------------------------------------------------------------------------
+# Observability schemas
+# ---------------------------------------------------------------------------
+
+class BaselineRequest(BaseModel):
+    prompt_version: str
+    model_id: str
+
+
+class RegressionRequest(BaseModel):
+    prompt_version: str
+    model_id: str
+    baseline_version: str
+
+
+class ResolverDriftRequest(BaseModel):
+    observacao: str = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# Observability endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/v1/observability/metrics")
+async def get_metrics(
+    days: int = Query(7, ge=1, le=90),
+    prompt_version: Optional[str] = Query(None),
+):
+    """Métricas diárias agregadas dos últimos N dias."""
+    logger.info("GET /v1/observability/metrics days=%d pv=%s", days, prompt_version)
+    try:
+        import psycopg2 as _psycopg2
+        url = os.getenv("DATABASE_URL")
+        conn = _psycopg2.connect(url)
+        cur = conn.cursor()
+        sql = """
+            SELECT data_referencia, prompt_version, model_id, total_interacoes,
+                   avg_latencia_ms, p95_latencia_ms, pct_scoring_alto, pct_contra_tese,
+                   pct_grounding_presente, taxa_alucinacao,
+                   taxa_bloqueio_m1, taxa_bloqueio_m2, taxa_bloqueio_m3, taxa_bloqueio_m4
+            FROM ai_metrics_daily
+            WHERE data_referencia >= CURRENT_DATE - %s::interval
+        """
+        params: list = [f"{days} days"]
+        if prompt_version:
+            sql += " AND prompt_version = %s"
+            params.append(prompt_version)
+        sql += " ORDER BY data_referencia DESC"
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        cols = ["data_referencia", "prompt_version", "model_id", "total_interacoes",
+                "avg_latencia_ms", "p95_latencia_ms", "pct_scoring_alto", "pct_contra_tese",
+                "pct_grounding_presente", "taxa_alucinacao",
+                "taxa_bloqueio_m1", "taxa_bloqueio_m2", "taxa_bloqueio_m3", "taxa_bloqueio_m4"]
+        result = [dict(zip(cols, [str(v) if hasattr(v, "isoformat") else v for v in row]))
+                  for row in rows]
+        # Resumo agregado
+        if rows:
+            def avg(col):
+                vals = [r[cols.index(col)] for r in rows if r[cols.index(col)] is not None]
+                return sum(vals) / len(vals) if vals else None
+            resumo = {
+                "total_interacoes": sum(r[3] for r in rows),
+                "avg_latencia_ms": avg("avg_latencia_ms"),
+                "p95_latencia_ms": avg("p95_latencia_ms"),
+                "pct_scoring_alto": avg("pct_scoring_alto"),
+                "taxa_alucinacao": avg("taxa_alucinacao"),
+            }
+        else:
+            resumo = {}
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error("Erro em /v1/observability/metrics: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"metrics": result, "resumo": resumo, "days": days}
+
+
+@app.get("/v1/observability/drift")
+async def get_drift_alerts(
+    prompt_version: Optional[str] = Query(None),
+    model_id: Optional[str] = Query(None),
+):
+    """Lista drift alerts ativos (resolvido=False)."""
+    logger.info("GET /v1/observability/drift pv=%s", prompt_version)
+    try:
+        import psycopg2 as _psycopg2
+        url = os.getenv("DATABASE_URL")
+        conn = _psycopg2.connect(url)
+        cur = conn.cursor()
+        sql = """
+            SELECT id, detectado_em, prompt_version, model_id, metrica,
+                   valor_baseline, valor_atual, desvios_padrao, resolvido, observacao
+            FROM drift_alerts
+            WHERE resolvido = FALSE
+        """
+        params: list = []
+        if prompt_version:
+            sql += " AND prompt_version = %s"
+            params.append(prompt_version)
+        if model_id:
+            sql += " AND model_id = %s"
+            params.append(model_id)
+        sql += " ORDER BY detectado_em DESC"
+        cur.execute(sql, params)
+        cols = ["id", "detectado_em", "prompt_version", "model_id", "metrica",
+                "valor_baseline", "valor_atual", "desvios_padrao", "resolvido", "observacao"]
+        result = [dict(zip(cols, [str(v) if hasattr(v, "isoformat") else v for v in row]))
+                  for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error("Erro em /v1/observability/drift: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@app.post("/v1/observability/drift/{alert_id}/resolver")
+async def resolver_drift(alert_id: int, req: ResolverDriftRequest):
+    """Resolve um drift alert com observação."""
+    logger.info("POST /v1/observability/drift/%d/resolver", alert_id)
+    try:
+        from src.observability.drift import DriftDetector, DriftDetectorError
+        DriftDetector().resolver_alert(alert_id, req.observacao)
+    except DriftDetectorError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Erro em resolver_drift: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"resolvido": True, "alert_id": alert_id}
+
+
+@app.post("/v1/observability/baseline", status_code=201)
+async def registrar_baseline(req: BaselineRequest):
+    """Registra baseline de métricas para a versão de prompt/modelo especificada."""
+    logger.info("POST /v1/observability/baseline pv=%s model=%s", req.prompt_version, req.model_id)
+    try:
+        from src.observability.drift import DriftDetector, DriftDetectorError
+        result = DriftDetector().registrar_baseline(req.prompt_version, req.model_id)
+    except DriftDetectorError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Erro em registrar_baseline: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
+
+
+@app.post("/v1/observability/regression")
+async def executar_regression(req: RegressionRequest):
+    """
+    Executa regression testing sobre o dataset de avaliação.
+    Timeout do cliente deve ser ≥ 120s — faz chamadas reais ao LLM.
+    """
+    logger.info("POST /v1/observability/regression pv=%s model=%s", req.prompt_version, req.model_id)
+    try:
+        from src.observability.regression import RegressionRunner
+        result = RegressionRunner().executar(
+            prompt_version=req.prompt_version,
+            model_id=req.model_id,
+            baseline_version=req.baseline_version,
+        )
+    except Exception as e:
+        logger.error("Erro em executar_regression: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "aprovado": result.aprovado,
+        "precisao_citacao": result.precisao_citacao,
+        "taxa_alucinacao": result.taxa_alucinacao,
+        "acuracia_recomendacao": result.acuracia_recomendacao,
+        "latencia_p95": result.latencia_p95,
+        "cobertura_contra_tese": result.cobertura_contra_tese,
+        "detalhes": result.detalhes,
+    }
