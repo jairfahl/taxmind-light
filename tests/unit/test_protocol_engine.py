@@ -149,10 +149,10 @@ def test_avancar_passo_invalido():
         engine.avancar(case_id, 99, {})
 
 
-def test_avancar_p9_terminal():
-    """Tentar avançar além do P9 deve lançar ProtocolError."""
+def test_avancar_p9_dados_vazios_valida():
+    """P9 com dados vazios deve lançar ProtocolError de validação (aprendizado_extraido obrigatório)."""
     engine = ProtocolStateEngine()
-    with pytest.raises(ProtocolError, match="terminal"):
+    with pytest.raises(ProtocolError, match="aprendizado_extraido"):
         engine.avancar(1, 9, {})
 
 

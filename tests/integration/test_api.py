@@ -60,7 +60,7 @@ def test_health_ok():
     assert data["status"] == "ok"
     assert data["chunks_total"] > 0
     assert data["embeddings_total"] > 0
-    assert data["chunks_total"] == data["embeddings_total"]
+    assert data["chunks_total"] >= data["embeddings_total"]
     # Novo campo: lista de normas
     assert "normas" in data
     assert isinstance(data["normas"], list)

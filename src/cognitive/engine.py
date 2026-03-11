@@ -272,6 +272,7 @@ def analisar(
     top_k: int = 3,
     rerank_top_n: int = 10,
     norma_filter: Optional[list[str]] = None,
+    excluir_tipos: Optional[list[str]] = None,
     model: str = MODEL_DEV,
 ) -> AnaliseResult:
     """
@@ -286,7 +287,8 @@ def analisar(
     conn = _get_db_conn()
 
     # P1 — Retrieve
-    chunks = retrieve(query, top_k=top_k, rerank_top_n=rerank_top_n, norma_filter=norma_filter)
+    _excluir = excluir_tipos if excluir_tipos is not None else ["Outro"]
+    chunks = retrieve(query, top_k=top_k, rerank_top_n=rerank_top_n, norma_filter=norma_filter, excluir_tipos=_excluir)
 
     # P2 — Quality Gate
     qualidade = avaliar_qualidade(query, chunks)

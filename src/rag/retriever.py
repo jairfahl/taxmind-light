@@ -90,6 +90,7 @@ def retrieve(
     top_k: int = TOP_K_DEFAULT,
     rerank_top_n: int = RERANK_TOP_N_DEFAULT,
     norma_filter: Optional[list[str]] = None,
+    excluir_tipos: Optional[list[str]] = None,
 ) -> list[ChunkResultado]:
     """
     Recupera os chunks mais relevantes para a query.
@@ -99,6 +100,7 @@ def retrieve(
         top_k: Número de resultados finais a retornar.
         rerank_top_n: Candidatos buscados vetorialmente antes do re-ranking.
         norma_filter: Lista de códigos de norma para filtrar (ex: ["LC214_2025"]).
+        excluir_tipos: Lista de tipos de norma a excluir (ex: ["Outro"]).
 
     Returns:
         Lista de ChunkResultado ordenada por score_final DESC.
@@ -139,6 +141,11 @@ def retrieve(
         placeholders = ",".join(["%s"] * len(norma_filter))
         sql_base += f" AND n.codigo IN ({placeholders})"
         params.extend(norma_filter)
+
+    if excluir_tipos:
+        placeholders = ",".join(["%s"] * len(excluir_tipos))
+        sql_base += f" AND n.tipo NOT IN ({placeholders})"
+        params.extend(excluir_tipos)
 
     sql_base += " ORDER BY e.vetor <=> %s::vector LIMIT %s"
     params.extend([vetor_str, rerank_top_n])

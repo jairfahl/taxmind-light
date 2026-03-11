@@ -66,6 +66,13 @@ norma_filter = [normas_disponiveis[n] for n in normas_sel] if normas_sel else No
 
 top_k = st.sidebar.slider("Trechos consultados", min_value=1, max_value=5, value=3)
 
+incluir_outros = st.sidebar.checkbox(
+    "Incluir documentos adicionais (tipo Outro)",
+    value=False,
+    help="Por padrão, PDFs adicionados manualmente ficam fora do RAG. "
+         "Marque para incluí-los nas consultas.",
+)
+
 st.sidebar.divider()
 
 # Health check na sidebar — BUG-07
@@ -106,7 +113,12 @@ with aba1:
             try:
                 resp = httpx.post(
                     f"{API_BASE}/v1/analyze",
-                    json={"query": query, "norma_filter": norma_filter, "top_k": top_k},
+                    json={
+                        "query": query,
+                        "norma_filter": norma_filter,
+                        "top_k": top_k,
+                        "excluir_tipos": [] if incluir_outros else ["Outro"],
+                    },
                     timeout=60,
                 )
             except httpx.ConnectError:
@@ -405,7 +417,10 @@ with aba3:
                             try:
                                 resp = httpx.post(
                                     f"{API_BASE}/v1/analyze",
-                                    json={"query": query_analise},
+                                    json={
+                                        "query": query_analise,
+                                        "excluir_tipos": [] if incluir_outros else ["Outro"],
+                                    },
                                     timeout=60.0,
                                 )
                                 resp.raise_for_status()
@@ -505,11 +520,11 @@ with aba3:
                         )
 
                     elif passo_atual == 9:
-                        dados_passo["padrao_extraido"] = st.text_area(
+                        dados_passo["aprendizado_extraido"] = st.text_area(
                             "Padrão extraído para aprendizado futuro",
                             placeholder="Descreva o padrão aprendido com este caso...",
                             height=100,
-                            value=step_dados_salvos.get("padrao_extraido", ""),
+                            value=step_dados_salvos.get("aprendizado_extraido", ""),
                         )
 
                     # BUG-13 — botão diferente no passo terminal P9
@@ -529,13 +544,11 @@ with aba3:
                             st.error("Data inválida. Use o formato dd-mm-aaaa")
                             st.stop()
 
-                    # BUG-13 — caso terminal P9: exibir conclusão
-                    if btn_avancar and passo_atual == 9:
+                    if r.status_code in (200, 201) and passo_atual == 9:
                         st.success("Caso concluído! Acesse a aba Documentos para gerar os outputs.")
                         st.balloons()
                         st.stop()
 
-                    acao = "voltar" if btn_voltar else "avancar"
                     try:
                         r2 = httpx.post(
                             f"{API_BASE}/v1/cases/{case_id_input}/steps/{passo_atual}",
