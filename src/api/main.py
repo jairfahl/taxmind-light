@@ -222,6 +222,26 @@ async def health():
     }
 
 
+@app.get("/v1/credits")
+async def get_credits():
+    """Status de creditos de API com alerta quando saldo <= US$0.50."""
+    try:
+        from src.observability.usage import obter_detalhamento, obter_status_creditos
+        status = obter_status_creditos()
+        detalhamento = obter_detalhamento()
+    except Exception as e:
+        logger.error("Erro em /v1/credits: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "total_gasto": status.total_gasto,
+        "limite": status.limite,
+        "saldo_restante": status.saldo_restante,
+        "alerta": status.alerta,
+        "mensagem": status.mensagem,
+        "detalhamento": detalhamento,
+    }
+
+
 def _processar_ingest_background(job_id: str, conteudo: bytes, filename: str,
                                   nome: str, tipo: str, codigo: str):
     """Processa ingestão de documento em background (extração + chunking + embeddings)."""

@@ -206,6 +206,18 @@ def _chamar_llm(
         messages=[{"role": "user", "content": user_msg}],
     )
 
+    # Registrar consumo de tokens
+    try:
+        from src.observability.usage import registrar_uso
+        registrar_uso(
+            service="anthropic",
+            model=model,
+            input_tokens=resp.usage.input_tokens,
+            output_tokens=resp.usage.output_tokens,
+        )
+    except Exception as _usage_err:
+        logger.debug("Registro de uso ignorado: %s", _usage_err)
+
     raw = resp.content[0].text.strip()
     # Remover possível markdown ```json ... ```
     if raw.startswith("```"):

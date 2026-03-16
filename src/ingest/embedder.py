@@ -53,6 +53,17 @@ def _embed_batch_com_retry(textos: list[str]) -> list[list[float]]:
     for tentativa in range(MAX_RETRIES):
         try:
             result = client.embed(textos, model=EMBEDDING_MODEL)
+            # Registrar consumo de tokens
+            try:
+                from src.observability.usage import registrar_uso
+                total_tokens = getattr(result, 'total_tokens', 0) or sum(len(t.split()) * 2 for t in textos)
+                registrar_uso(
+                    service="voyageai",
+                    model=EMBEDDING_MODEL,
+                    input_tokens=total_tokens,
+                )
+            except Exception:
+                pass
             return result.embeddings
         except voyageai.error.RateLimitError as e:
             delay = RATELIMIT_DELAYS[min(tentativa, len(RATELIMIT_DELAYS) - 1)]

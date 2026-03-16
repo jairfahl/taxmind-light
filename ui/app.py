@@ -64,9 +64,35 @@ def _buscar_normas_disponiveis() -> dict[str, str]:
         }
 
 
+# --- Alerta global de creditos ---
+@st.cache_data(ttl=60)
+def _verificar_creditos():
+    """Consulta saldo de creditos de API a cada 60s."""
+    try:
+        resp = httpx.get(f"{API_BASE}/v1/credits", timeout=3)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return None
+
+_creditos = _verificar_creditos()
+if _creditos and _creditos.get("alerta"):
+    if _creditos["saldo_restante"] <= 0:
+        st.error(f"🚨 {_creditos['mensagem']}")
+    else:
+        st.warning(f"⚠️ {_creditos['mensagem']}")
+
 # --- Sidebar ---
 st.sidebar.title("⚖️ TaxMind Light")
 st.sidebar.caption("Reforma Tributária · Base dinâmica de normas")
+
+if _creditos:
+    saldo = _creditos.get("saldo_restante", 0)
+    limite = _creditos.get("limite", 0)
+    pct = (saldo / limite * 100) if limite > 0 else 0
+    st.sidebar.metric("Saldo API", f"US$ {saldo:.2f}", delta=f"{pct:.0f}% restante")
+    st.sidebar.divider()
 
 normas_disponiveis = _buscar_normas_disponiveis()
 

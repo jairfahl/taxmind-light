@@ -62,6 +62,17 @@ def _embed_query(query: str) -> list[float]:
     for tentativa in range(3):
         try:
             result = client.embed([query], model=EMBEDDING_MODEL)
+            # Registrar consumo de tokens
+            try:
+                from src.observability.usage import registrar_uso
+                total_tokens = getattr(result, 'total_tokens', 0) or len(query.split()) * 2
+                registrar_uso(
+                    service="voyageai",
+                    model=EMBEDDING_MODEL,
+                    input_tokens=total_tokens,
+                )
+            except Exception:
+                pass
             return result.embeddings[0]
         except voyageai.error.RateLimitError as e:
             if tentativa < 2:

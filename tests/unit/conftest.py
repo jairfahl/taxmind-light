@@ -111,3 +111,10 @@ def mock_stakeholder_adaptar():
         return_value="Resumo mock adaptado para stakeholder.",
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def mock_usage_tracking():
+    """Bloqueia registro de uso de API (evita acesso ao banco)."""
+    with patch("src.observability.usage.registrar_uso"):
+        yield
