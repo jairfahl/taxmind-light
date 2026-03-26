@@ -1,11 +1,12 @@
 services:
   db:
+    container_name: taxmind-db
     image: pgvector/pgvector:pg16
     env_file: .env
     ports:
       - "5436:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - taxmind_pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     command: >
       postgres
@@ -17,30 +18,48 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       retries: 5
+    networks:
+      - taxmind-net
 
   api:
+    container_name: taxmind-api
     build: .
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "8020:8000"
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://taxmind:taxmind123@db:5432/taxmind_db
+    volumes:
+      - ./src:/app/src
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - taxmind-net
 
   ui:
+    container_name: taxmind-ui
     build: .
-    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true
     ports:
-      - "8501:8501"
+      - "8521:8501"
     env_file: .env
     environment:
       - API_BASE_URL=http://api:8000
       - DATABASE_URL=postgresql://taxmind:taxmind123@db:5432/taxmind_db
+    volumes:
+      - ./ui:/app/ui
+      - ./src:/app/src
     depends_on:
       - api
+    networks:
+      - taxmind-net
 
 volumes:
-  pgdata:
+  taxmind_pgdata:
+    external: true
+
+networks:
+  taxmind-net:
+    name: taxmind-net

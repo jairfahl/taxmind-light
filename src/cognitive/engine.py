@@ -40,6 +40,11 @@ PROMPT_VERSION = "v1.0.0-sprint2"
 MODEL_DEV = "claude-haiku-4-5-20251001"
 MODEL_PROD = "claude-sonnet-4-6"
 
+MODEL_OUTPUT_LIMITS = {
+    "claude-haiku-4-5-20251001": 8192,
+    "claude-sonnet-4-6": 16384,
+}
+
 SYSTEM_PROMPT = """## [SUMMARY]
 Você é um especialista em tributação da Reforma Tributária brasileira
 (EC 132/2023, LC 214/2025, LC 227/2026), com foco em impacto operacional
@@ -204,6 +209,109 @@ def _montar_contexto(chunks: list[ChunkResultado]) -> str:
     return "\n\n".join(partes)
 
 
+def _formatar_contexto_caso(contexto_caso: dict) -> str:
+    """Formata dados dos passos anteriores do caso para injeção no prompt."""
+    partes: list[str] = []
+    # P1 — Identificação do caso
+    if p1 := contexto_caso.get(1):
+        if titulo := p1.get("titulo"):
+            partes.append(f"- Título do caso: {titulo}")
+        if desc := p1.get("descricao"):
+            partes.append(f"- Descrição: {desc}")
+        if ctx := p1.get("contexto_fiscal"):
+            partes.append(f"- Contexto fiscal: {ctx}")
+    # P2 — Premissas
+    if p2 := contexto_caso.get(2):
+        if premissas := p2.get("premissas"):
+            partes.append(f"- Premissas: {premissas}")
+        if periodo := p2.get("periodo_fiscal"):
+            partes.append(f"- Período fiscal: {periodo}")
+        if regime := p2.get("regime_tributario"):
+            partes.append(f"- Regime tributário: {regime}")
+        # Capturar campos extras comuns
+        for k, v in p2.items():
+            if k not in ("premissas", "periodo_fiscal", "regime_tributario") and v:
+                partes.append(f"- {k.replace('_', ' ').capitalize()}: {v}")
+    # P3 — Riscos mapeados
+    if p3 := contexto_caso.get(3):
+        if riscos := p3.get("riscos"):
+            if isinstance(riscos, list):
+                partes.append(f"- Riscos mapeados: {'; '.join(r for r in riscos if r)}")
+            else:
+                partes.append(f"- Riscos mapeados: {riscos}")
+        if qual := p3.get("dados_qualidade"):
+            partes.append(f"- Qualidade dos dados: {qual}")
+    # P5 — Hipótese do gestor (se disponível)
+    if p5 := contexto_caso.get(5):
+        if hip := p5.get("hipotese_gestor"):
+            partes.append(f"- Posição prévia do gestor: {hip}")
+    if not partes:
+        return ""
+    return (
+        "\n\nCONTEXTO DO CASO (informações confirmadas pelo usuário em etapas anteriores — "
+        "considere como FATOS ESTABELECIDOS, NÃO elabore cenários que os contradigam):\n"
+        + "\n".join(partes)
+    )
+
+
+def _formatar_casos_similares(casos: list[dict]) -> str:
+    """Formata casos concluídos similares para injeção no prompt como aprendizado institucional."""
+    if not casos:
+        return ""
+    partes = []
+    for i, c in enumerate(casos, 1):
+        bloco = [f"Caso #{c['case_id']}: {c['titulo']}"]
+        if c.get("premissas"):
+            bloco.append(f"  Premissas: {'; '.join(c['premissas'][:3])}")
+        if c.get("decisao_final"):
+            bloco.append(f"  Decisão tomada: {c['decisao_final'][:200]}")
+        if c.get("resultado_real"):
+            bloco.append(f"  Resultado real: {c['resultado_real'][:200]}")
+        if c.get("aprendizado"):
+            bloco.append(f"  Aprendizado: {c['aprendizado'][:200]}")
+        partes.append("\n".join(bloco))
+    return (
+        "\n\nAPRENDIZADO INSTITUCIONAL — Casos concluídos similares (use como referência, "
+        "NÃO como fonte legislativa. Mencione se algum padrão ou aprendizado anterior for relevante):\n"
+        + "\n---\n".join(partes)
+    )
+
+
+def _comprimir_para_haiku(
+    contexto: str,
+    casos_similares: Optional[list[dict]],
+    usar_cot: bool,
+) -> tuple[str, Optional[list[dict]], bool]:
+    """Comprime contexto quando usando Haiku para deixar budget suficiente para output.
+
+    Returns:
+        (contexto_comprimido, casos_similares_limitados, usar_cot_ajustado)
+    """
+    # Limitar cada chunk a 1500 chars
+    partes = contexto.split("\n\n")
+    partes_comprimidas = []
+    for parte in partes:
+        if len(parte) > 1500:
+            partes_comprimidas.append(parte[:1500] + "...")
+        else:
+            partes_comprimidas.append(parte)
+    contexto_comprimido = "\n\n".join(partes_comprimidas)
+
+    # Limitar casos similares a 1 caso com campos truncados
+    casos_limitados = None
+    if casos_similares:
+        caso = casos_similares[0].copy()
+        for campo in ("decisao_final", "resultado_real", "aprendizado", "premissas"):
+            if campo in caso and isinstance(caso[campo], str) and len(caso[campo]) > 150:
+                caso[campo] = caso[campo][:150] + "..."
+            elif campo in caso and isinstance(caso[campo], list):
+                caso[campo] = caso[campo][:1]
+        casos_limitados = [caso]
+
+    # Skip CoT para economizar ~100 tokens de output
+    return contexto_comprimido, casos_limitados, False
+
+
 def _chamar_llm(
     query: str,
     contexto: str,
@@ -212,21 +320,42 @@ def _chamar_llm(
     model: str = MODEL_DEV,
     query_tipo: str = "INTERPRETATIVA",
     quality_gate: str = "VERDE",
+    contexto_caso: Optional[dict] = None,
+    casos_similares: Optional[list[dict]] = None,
+    _escalated: bool = False,
 ) -> dict:
-    """Chama o LLM e retorna o JSON parseado."""
+    """Chama o LLM e retorna o JSON parseado.
+
+    Se o modelo truncar a saída (stop_reason=max_tokens) e for Haiku,
+    tenta auto-escalar para Sonnet uma vez.
+    """
     client = _get_client()
+
+    # Comprimir contexto para Haiku
+    if model == MODEL_DEV and not _escalated:
+        contexto, casos_similares, usar_cot = _comprimir_para_haiku(
+            contexto, casos_similares, usar_cot
+        )
+
     load_result = carregar_secoes_prompt(SYSTEM_PROMPT, query_tipo, quality_gate)
     system = load_result.conteudo_carregado + (COT_INSTRUCTION if usar_cot else "")
 
+    caso_str = _formatar_contexto_caso(contexto_caso) if contexto_caso else ""
+    similares_str = _formatar_casos_similares(casos_similares) if casos_similares else ""
+
     user_msg = (
         f"TRECHOS LEGISLATIVOS RECUPERADOS:\n{contexto}\n\n"
-        f"CONSULTA: {query}\n\n"
+        f"CONSULTA: {query}"
+        f"{caso_str}"
+        f"{similares_str}\n\n"
         "Responda APENAS com o JSON especificado."
     )
 
+    max_tokens = MODEL_OUTPUT_LIMITS.get(model, 8192)
+
     resp = client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=max_tokens,
         temperature=temperatura,
         system=system,
         messages=[{"role": "user", "content": user_msg}],
@@ -244,6 +373,33 @@ def _chamar_llm(
     except Exception as _usage_err:
         logger.debug("Registro de uso ignorado: %s", _usage_err)
 
+    # Detectar truncamento antes de tentar parse
+    if resp.stop_reason == "max_tokens":
+        logger.warning(
+            "LLM output truncado: model=%s, output_tokens=%d, stop_reason=max_tokens",
+            model, resp.usage.output_tokens,
+        )
+        # Auto-escalar Haiku → Sonnet (uma vez)
+        if model == MODEL_DEV and not _escalated:
+            logger.info("Auto-escalando de %s para %s após truncamento", MODEL_DEV, MODEL_PROD)
+            return _chamar_llm(
+                query=query,
+                contexto=contexto,
+                temperatura=temperatura,
+                usar_cot=usar_cot,
+                model=MODEL_PROD,
+                query_tipo=query_tipo,
+                quality_gate=quality_gate,
+                contexto_caso=contexto_caso,
+                casos_similares=casos_similares,
+                _escalated=True,
+            )
+        raise RuntimeError(
+            f"LLM output truncado (stop_reason=max_tokens, model={model}, "
+            f"output_tokens={resp.usage.output_tokens}). "
+            f"Prompt muito longo para capacidade de output do modelo."
+        )
+
     raw = resp.content[0].text.strip()
     # Remover possível markdown ```json ... ```
     if raw.startswith("```"):
@@ -253,10 +409,13 @@ def _chamar_llm(
     try:
         return json.loads(raw)
     except json.JSONDecodeError as e:
-        logger.error("JSON malformado. raw=%s... erro=%s", raw[:200], e)
+        logger.error(
+            "JSON malformado: model=%s, stop_reason=%s, output_tokens=%d, raw=%s... erro=%s",
+            model, resp.stop_reason, resp.usage.output_tokens, raw[:200], e,
+        )
         raise RuntimeError(
-            f"LLM retornou JSON inválido (provável truncamento). "
-            f"Posição: {e.pos}. Aumentar max_tokens se recorrente."
+            f"LLM retornou JSON inválido: model={model}, stop_reason={resp.stop_reason}, "
+            f"output_tokens={resp.usage.output_tokens}, posição={e.pos}."
         ) from e
 
 
@@ -380,20 +539,26 @@ def analisar(
     excluir_tipos: Optional[list[str]] = None,
     model: str = MODEL_DEV,
     decompose: bool = False,
+    contexto_caso: Optional[dict] = None,
+    casos_similares: Optional[list[dict]] = None,
 ) -> AnaliseResult:
     """
-    Pipeline completo de análise tributária P1→P4.
+    Pipeline completo de análise tributária (6 Passos).
 
-    P1: Retrieve (RAG) — com adaptive params e decomposição opcional
-    P2: Quality gate (semáforo)
-    P3: LLM + CoT + anti-alucinação
-    P4: Retorno estruturado
+    Retrieve (RAG) → Quality gate → LLM + CoT + anti-alucinação → Retorno estruturado
+
+    Args:
+        contexto_caso: dados dos passos anteriores do caso atual (keyed by passo int).
+                       Quando fornecido, o LLM trata essas informações como fatos confirmados.
+        casos_similares: lista de casos concluídos similares para retroalimentação.
+                         Cada item contém: titulo, premissas, decisao_final, resultado_real, aprendizado.
     """
     t0 = time.time()
     conn = _get_db_conn()
     try:
         return _analisar_inner(conn, query, top_k, rerank_top_n, norma_filter,
-                               excluir_tipos, model, decompose, t0)
+                               excluir_tipos, model, decompose, t0, contexto_caso,
+                               casos_similares)
     finally:
         put_conn(conn)
 
@@ -408,8 +573,10 @@ def _analisar_inner(
     model: str,
     decompose: bool,
     t0: float,
+    contexto_caso: Optional[dict] = None,
+    casos_similares: Optional[list[dict]] = None,
 ) -> AnaliseResult:
-    """Corpo interno do pipeline P1→P4 (chamado por analisar com try/finally)."""
+    """Corpo interno do pipeline de análise (chamado por analisar com try/finally)."""
     # P1 — Retrieve (com parâmetros adaptativos)
     _excluir = excluir_tipos if excluir_tipos is not None else ["Outro"]
     params = obter_params_adaptativos(query, top_k_base=top_k, rerank_top_n_base=rerank_top_n)
@@ -527,13 +694,15 @@ def _analisar_inner(
     qt_str = query_tipo.value.upper()
     qg_str = qualidade.status.value.upper()
     dados = _chamar_llm(query, contexto, temperatura=temperatura, usar_cot=False, model=model,
-                        query_tipo=qt_str, quality_gate=qg_str)
+                        query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
+                        casos_similares=casos_similares)
 
     # Ativar CoT se necessário e re-chamar
     if _precisa_cot(qualidade, dados):
         logger.info("Ativando Chain-of-Thought para query: %s", query[:60])
         dados = _chamar_llm(query, contexto, temperatura=0.3, usar_cot=True, model=model,
-                            query_tipo=qt_str, quality_gate=qg_str)
+                            query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
+                            casos_similares=casos_similares)
 
     # P4 — Anti-alucinação
     anti = AntiAlucinacaoResult()
@@ -561,7 +730,8 @@ def _analisar_inner(
         dados_corrigido = _chamar_llm(
             query, contexto + instrucao_corretiva,
             temperatura=0.0, usar_cot=False, model=model,
-            query_tipo=qt_str, quality_gate=qg_str,
+            query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
+            casos_similares=casos_similares,
         )
         m4_ok2, m4_flags2 = _verificar_m4_consistencia(dados_corrigido)
         if m4_ok2:

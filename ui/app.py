@@ -1,6 +1,6 @@
 """
 ui/app.py — Interface Streamlit para TaxMind Light.
-Aba 1: Consultar · Aba 2: Adicionar Norma · Aba 3: Protocolo P1→P9 · Aba 4: Documentos · Aba 5: Qualidade do Sistema
+Aba 1: Consultar · Aba 2: Adicionar Norma · Aba 3: Protocolo de Decisão · Aba 4: Documentos · Aba 5: Qualidade do Sistema
 Consome a FastAPI em http://localhost:8000.
 """
 
@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8020")
 
 # BUG-04 — nomes legíveis para os códigos internos de norma
 NOMES_NORMAS = {
@@ -47,21 +47,67 @@ st.set_page_config(
 )
 
 
+_TOOLTIP_CSS_INJECTED = False
+
+
+def _inject_tooltip_css() -> None:
+    """Injeta CSS de tooltip uma única vez."""
+    global _TOOLTIP_CSS_INJECTED  # noqa: PLW0603
+    if _TOOLTIP_CSS_INJECTED:
+        return
+    st.markdown("""
+    <style>
+    .tm-tip{display:inline-block;position:relative}
+    .tm-tip .tm-icon{cursor:help;color:#999;font-size:0.8em;
+        border:1px solid #666;border-radius:50%;padding:0 5px;margin-left:4px;
+        font-weight:bold;user-select:none}
+    .tm-tip .tm-box{visibility:hidden;opacity:0;
+        background:#1e1e1e;color:#e0e0e0;border:1px solid #444;
+        text-align:left;border-radius:8px;padding:10px 14px;
+        position:absolute;z-index:9999;bottom:calc(100% + 8px);left:0;
+        min-width:280px;max-width:420px;font-size:0.82em;font-weight:400;
+        line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,0.4);
+        transition:opacity 0.15s ease-in-out,visibility 0.15s ease-in-out}
+    .tm-tip:hover .tm-box{visibility:visible;opacity:1}
+    </style>
+    """, unsafe_allow_html=True)
+    _TOOLTIP_CSS_INJECTED = True
+
+
+def _lbl(texto: str, dica: str) -> None:
+    """Renderiza label com (?) e tooltip CSS imediatamente ao lado do texto."""
+    _inject_tooltip_css()
+    st.markdown(
+        f'{texto} <span class="tm-tip">'
+        f'<span class="tm-icon">?</span>'
+        f'<span class="tm-box">{dica}</span>'
+        f'</span>',
+        unsafe_allow_html=True,
+    )
+
+
 # --- Buscar normas disponíveis do /v1/health ---
+_FALLBACK_NORMAS = {
+    "EC 132/2023": "EC_132",
+    "LC 214/2025": "LC_214",
+    "LC 227/2026": "LC_227",
+}
+
+
 @st.cache_data(ttl=30)
 def _buscar_normas_disponiveis() -> dict[str, str]:
-    """Retorna dict {nome_display: codigo} buscado dinamicamente da API."""
-    try:
-        hr = httpx.get(f"{API_BASE}/v1/health", timeout=3)
-        normas = hr.json().get("normas", [])
-        return {n["nome"]: n["codigo"] for n in normas}
-    except Exception:
-        # Fallback estático se API offline
-        return {
-            "EC 132/2023": "EC132_2023",
-            "LC 214/2025": "LC214_2025",
-            "LC 227/2026": "LC227_2026",
-        }
+    """Busca normas da API. Se falhar, retorna fallback e limpa cache na próxima."""
+    import time as _t
+    for _tentativa in range(3):
+        try:
+            hr = httpx.get(f"{API_BASE}/v1/health", timeout=10)
+            normas = hr.json().get("normas", [])
+            if normas:
+                return {n["nome"]: n["codigo"] for n in normas}
+        except Exception:
+            if _tentativa < 2:
+                _t.sleep(2)
+    return _FALLBACK_NORMAS
 
 
 # --- Alerta global de creditos ---
@@ -111,15 +157,22 @@ if _docs_novos > 0:
     st.sidebar.divider()
 
 normas_disponiveis = _buscar_normas_disponiveis()
+# Se retornou o fallback (3 normas), limpar cache para tentar de novo no próximo reload
+if len(normas_disponiveis) <= len(_FALLBACK_NORMAS):
+    _buscar_normas_disponiveis.clear()
 
 normas_sel = st.sidebar.multiselect(
     "Filtrar por norma",
     options=list(normas_disponiveis.keys()),
     default=list(normas_disponiveis.keys()),
+    help="Selecione quais normas legislativas devem ser consultadas na busca. Por padrão, todas as normas disponíveis são incluídas.",
 )
 norma_filter = [normas_disponiveis[n] for n in normas_sel] if normas_sel else None
 
-top_k = st.sidebar.slider("Trechos consultados", min_value=3, max_value=10, value=5)
+top_k = st.sidebar.slider(
+    "Trechos consultados", min_value=3, max_value=10, value=5,
+    help="Quantidade de trechos legislativos que o sistema recupera para fundamentar cada análise. Mais trechos = resposta mais completa, mas potencialmente mais lenta.",
+)
 
 incluir_outros = st.sidebar.checkbox(
     "Incluir documentos adicionais (tipo Outro)",
@@ -133,14 +186,18 @@ st.sidebar.divider()
 # Health check na sidebar — reusa cache de _buscar_normas_disponiveis (evita 2a chamada)
 @st.cache_data(ttl=30)
 def _health_check():
-    try:
-        hr = httpx.get(f"{API_BASE}/v1/health", timeout=5)
-        if hr.status_code == 200:
-            return hr.json()
-    except (httpx.ConnectError, httpx.TimeoutException):
-        return None
-    except Exception:
-        return None
+    import time as _time
+    for _attempt in range(3):
+        try:
+            hr = httpx.get(f"{API_BASE}/v1/health", timeout=10)
+            if hr.status_code == 200:
+                return hr.json()
+        except (httpx.ConnectError, httpx.TimeoutException):
+            if _attempt < 2:
+                _time.sleep(2)
+            continue
+        except Exception:
+            return None
     return None
 
 _hdata = _health_check()
@@ -153,7 +210,7 @@ else:
     st.sidebar.warning("API indisponível — recarregue a página")
 
 # --- Abas ---
-aba1, aba2, aba3, aba4, aba5 = st.tabs(["Consultar", "Adicionar Norma", "Protocolo P1→P9", "Documentos", "Qualidade do Sistema"])
+aba1, aba2, aba3, aba4 = st.tabs(["Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos"])
 
 
 # ===========================================================================
@@ -163,10 +220,12 @@ with aba1:
     st.title("TaxMind Light — Reforma Tributária")
     st.caption("Análise tributária com base legislativa verificada · Esta análise não substitui a avaliação do seu time fiscal")
 
+    _lbl("Sua consulta", "Digite sua dúvida tributária relacionada à Reforma Tributária (IBS, CBS, ICMS, alíquotas, etc.). O sistema buscará na legislação e gerará uma análise fundamentada.")
     query = st.text_area(
         "Sua consulta",
-        placeholder="Ex: Como funciona o split payment para e-commerce com plataforma digital intermediária?",
+        placeholder="Insira aqui sua consulta ou dúvida sobre a Reforma Tributária",
         height=100,
+        label_visibility="collapsed",
     )
 
     if st.button("Analisar", type="primary", disabled=not query.strip()):
@@ -322,9 +381,11 @@ with aba2:
     st.title("Adicionar Norma")
     st.caption("Adicione INs, Resoluções, Pareceres ou Manuais à base de conhecimento.")
 
+    _lbl("Selecione o arquivo", "Faça upload do documento legislativo que deseja adicionar à base de conhecimento. Formatos aceitos: PDF, DOCX, XLSX, HTML, TXT, MD, CSV.")
     uploaded_file = st.file_uploader(
         "Selecione o arquivo",
         type=["pdf", "docx", "xlsx", "html", "htm", "txt", "md", "csv"],
+        label_visibility="collapsed",
     )
 
     # Verificar duplicidade imediatamente após upload
@@ -352,13 +413,16 @@ with aba2:
     if _dup_bloqueado:
         st.stop()
 
+    _lbl("Nome do documento", "Informe o nome oficial ou identificador do documento (tipo, número e ano).")
     nome_doc = st.text_input(
         "Nome do documento",
-        placeholder="Ex: IN RFB 2184/2024",
+        label_visibility="collapsed",
     )
+    _lbl("Tipo", "Classificação do documento: IN (Instrução Normativa), Resolução, Parecer, Manual ou Outro. Documentos do tipo 'Outro' ficam fora das consultas por padrão.")
     tipo_doc = st.selectbox(
         "Tipo",
         options=["IN", "Resolução", "Parecer", "Manual", "Outro"],
+        label_visibility="collapsed",
     )
 
     st.info(
@@ -566,18 +630,15 @@ with aba2:
 
 
 # ===========================================================================
-# ABA 3 — Protocolo P1→P9
+# ABA 3 — Protocolo de Decisão (6 Passos)
 # ===========================================================================
 PASSO_NOME = {
-    1: "P1 · Identificar o problema",
-    2: "P2 · Mapear o cenário da empresa",
-    3: "P3 · Avaliar riscos e dados",
-    4: "P4 · Análise tributária",
-    5: "P5 · Posição do gestor",
-    6: "P6 · Recomendação TaxMind",
-    7: "P7 · Decisão e responsável",
-    8: "P8 · Acompanhamento",
-    9: "P9 · Registro de aprendizado",
+    1: "Passo 1 · Registrar & Classificar",
+    2: "Passo 2 · Estruturar riscos e dados",
+    3: "Passo 3 · Análise tributária",
+    4: "Passo 4 · Posição do gestor (hipótese)",
+    5: "Passo 5 · Decidir",
+    6: "Passo 6 · Ciclo Pós-Decisão",
 }
 STATUS_BADGE = {
     "rascunho": "🔵",
@@ -599,18 +660,21 @@ STATUS_LABEL = {
 }
 
 with aba3:
-    st.title("Protocolo de Decisão Tributária P1→P9")
+    st.title("Protocolo de Decisão Tributária — 6 Passos")
     st.caption(
         "Registre, analise e documente decisões tributárias com rastreabilidade completa. "
-        "P5 (hipótese do gestor) deve ser concluído antes de ver a recomendação da IA (P6)."
+        "Passo 4 (hipótese do gestor) deve ser concluído antes de ver a recomendação da IA (Passo 5 — Decidir)."
     )
 
     # ------ Seção: Criar novo caso ------
     with st.expander("➕ Criar Novo Caso", expanded=False):
         with st.form("form_criar_caso"):
-            titulo_caso = st.text_input("Nome do caso (mín. 10 chars)", placeholder="Ex: Apuração CBS — CNPJ 12.345.678/0001-90")
-            descricao_caso = st.text_area("Descreva o problema tributário", placeholder="Descreva o contexto do caso...", height=80)
-            contexto_fiscal = st.text_input("Situação atual da empresa", placeholder="Ex: Empresa de serviços de TI — Lucro Presumido")
+            _lbl("Nome do caso (mín. 10 chars)", "Identificação única do caso. Deve ter no mínimo 10 caracteres e permitir reconhecer o caso rapidamente na lista.")
+            titulo_caso = st.text_input("Nome do caso", label_visibility="collapsed")
+            _lbl("Descreva o problema tributário", "Explique a questão tributária que precisa ser analisada, incluindo o contexto e as dúvidas principais.")
+            descricao_caso = st.text_area("Descreva o problema", height=80, label_visibility="collapsed")
+            _lbl("Situação atual da empresa", "Regime tributário, porte, setor de atuação e outras informações relevantes sobre a empresa.")
+            contexto_fiscal = st.text_input("Situação atual", label_visibility="collapsed")
             submitted_criar = st.form_submit_button("Criar Caso", type="primary")
 
         if submitted_criar:
@@ -640,17 +704,36 @@ with aba3:
 
     st.divider()
 
-    # ------ Seção: Consultar estado do caso ------
-    st.subheader("Consultar / Avançar Caso")
-    _default_case_id = int(st.session_state.get("case_id_ativo", 1))
-    case_id_input = st.number_input("Número do caso", min_value=1, step=1, value=_default_case_id)
+    # ------ Seção: Casos existentes ------
+    st.subheader("Seus Casos")
 
-    col_load, col_refresh = st.columns([1, 4])
-    with col_load:
-        load_case = st.button("Carregar Caso")
+    _proto_cases = []
+    try:
+        _proto_resp = httpx.get(f"{API_BASE}/v1/cases", timeout=10)
+        if _proto_resp.status_code == 200:
+            _proto_cases = _proto_resp.json()
+    except Exception:
+        pass
 
-    _autoload = st.session_state.get("case_id_ativo") == case_id_input
-    if load_case or st.session_state.get("_proto_case_id") == case_id_input or _autoload:
+    if _proto_cases:
+        _proto_options = {
+            f"#{c['case_id']}  |  {c['titulo'][:55]}  |  P{c['passo_atual']} — {STATUS_LABEL.get(c['status'], c['status'])}": c["case_id"]
+            for c in _proto_cases
+        }
+        _lbl("Selecione um caso", "Escolha o caso que deseja visualizar ou continuar preenchendo. Cada caso passa por 6 etapas de análise.")
+        _proto_sel = st.selectbox(
+            "Selecione um caso",
+            options=list(_proto_options.keys()),
+            key="proto_case_select",
+            label_visibility="collapsed",
+        )
+        case_id_input = _proto_options[_proto_sel]
+    else:
+        st.info("Nenhum caso encontrado. Crie um caso acima.")
+        case_id_input = int(st.session_state.get("case_id_ativo", 1))
+
+    _autoload = True
+    if _proto_cases or st.session_state.get("_proto_case_id") == case_id_input:
         st.session_state["_proto_case_id"] = case_id_input
         try:
             r = httpx.get(f"{API_BASE}/v1/cases/{case_id_input}", timeout=30)
@@ -678,7 +761,7 @@ with aba3:
             # Caso já concluído — modo read-only com navegação entre passos
             _caso_concluido = status == "aprendizado_extraido"
             if _caso_concluido:
-                st.progress(1.0, text="Etapa 9/9 — Concluído")
+                st.progress(1.0, text="Etapa 6/6 — Concluído")
                 st.success(
                     "**Caso concluído e registrado com sucesso!** "
                     "Navegue pelos passos abaixo para revisar todas as informações."
@@ -692,11 +775,13 @@ with aba3:
 
                 # Navegador de passos read-only
                 _steps_data_ro = caso.get("steps") or caso.get("passos") or {}
+                _lbl("Visualizar passo", "Navegue entre as 6 etapas do protocolo para revisar os dados registrados em cada passo.")
                 _passo_vis = st.selectbox(
                     "Visualizar passo:",
-                    options=[1, 2, 3, 4, 5, 6, 7, 8, 9],
-                    format_func=lambda p: PASSO_NOME.get(p, f"P{p}"),
+                    options=[1, 2, 3, 4, 5, 6],
+                    format_func=lambda p: PASSO_NOME.get(p, f"Passo {p}"),
                     key="passo_visualizar_readonly",
+                    label_visibility="collapsed",
                 )
                 _step_ro = _steps_data_ro.get(_passo_vis) or _steps_data_ro.get(str(_passo_vis)) or {}
                 _dados_ro = _step_ro.get("dados") or {}
@@ -704,16 +789,13 @@ with aba3:
                 st.divider()
 
                 if _passo_vis == 1:
-                    st.subheader("P1 — Identificar o problema")
+                    st.subheader("Passo 1 — Registrar & Classificar")
                     st.caption("Título do caso")
                     st.info(_dados_ro.get("titulo", caso.get("titulo", "—")))
                     st.caption("Descrição do problema tributário")
                     st.markdown(_dados_ro.get("descricao") or "—")
                     st.caption("Situação atual da empresa")
                     st.markdown(_dados_ro.get("contexto_fiscal") or "—")
-
-                elif _passo_vis == 2:
-                    st.subheader("P2 — Mapear o cenário da empresa")
                     st.caption("Premissas declaradas")
                     _prems = _dados_ro.get("premissas", [])
                     if _prems:
@@ -724,8 +806,8 @@ with aba3:
                     st.caption("Período de referência")
                     st.info(_dados_ro.get("periodo_fiscal") or "—")
 
-                elif _passo_vis == 3:
-                    st.subheader("P3 — Avaliar riscos e dados")
+                elif _passo_vis == 2:
+                    st.subheader("Passo 2 — Estruturar riscos e dados")
                     st.caption("Riscos mapeados")
                     _riscos = _dados_ro.get("riscos", [])
                     if _riscos:
@@ -737,8 +819,8 @@ with aba3:
                     _qual_map = {"verde": "🟢 Verde — dados completos", "amarelo": "🟡 Amarelo — dados parciais", "vermelho": "🔴 Vermelho — dados insuficientes"}
                     st.info(_qual_map.get(_dados_ro.get("dados_qualidade", ""), _dados_ro.get("dados_qualidade") or "—"))
 
-                elif _passo_vis == 4:
-                    st.subheader("P4 — Análise tributária (TaxMind)")
+                elif _passo_vis == 3:
+                    st.subheader("Passo 3 — Análise tributária (TaxMind)")
                     st.caption("Pergunta submetida")
                     st.info(_dados_ro.get("query_analise") or "—")
                     _analise = _dados_ro.get("analise_result") or {}
@@ -784,32 +866,27 @@ with aba3:
                     else:
                         st.warning("Dados da análise não disponíveis.")
 
-                elif _passo_vis == 5:
-                    st.subheader("P5 — Posição do gestor")
+                elif _passo_vis == 4:
+                    st.subheader("Passo 4 — Posição do gestor (hipótese)")
                     st.caption("Posição independente registrada antes da recomendação da IA")
                     st.markdown(_dados_ro.get("hipotese_gestor") or "—")
 
-                elif _passo_vis == 6:
-                    st.subheader("P6 — Recomendação TaxMind")
-                    st.caption("Recomendação gerada pela IA (com base na análise P4)")
+                elif _passo_vis == 5:
+                    st.subheader("Passo 5 — Decidir")
+                    st.caption("Recomendação gerada pela IA (com base na análise do Passo 3)")
                     st.markdown(_sanitize_latex(_dados_ro.get("recomendacao") or "—"))
-
-                elif _passo_vis == 7:
-                    st.subheader("P7 — Decisão e responsável")
+                    st.divider()
                     st.caption("Decisão tomada")
                     st.info(_dados_ro.get("decisao_final") or "—")
                     st.caption("Responsável pela decisão")
                     st.info(_dados_ro.get("decisor") or "—")
 
-                elif _passo_vis == 8:
-                    st.subheader("P8 — Acompanhamento")
+                elif _passo_vis == 6:
+                    st.subheader("Passo 6 — Ciclo Pós-Decisão")
                     st.caption("O que aconteceu na prática")
                     st.markdown(_dados_ro.get("resultado_real") or "—")
                     st.caption("Data de revisão")
                     st.info(_dados_ro.get("data_revisao") or "—")
-
-                elif _passo_vis == 9:
-                    st.subheader("P9 — Registro de aprendizado")
                     st.caption("Aprendizado extraído deste caso")
                     st.markdown(_dados_ro.get("aprendizado_extraido") or "—")
 
@@ -826,7 +903,7 @@ with aba3:
 
             else:
                 # Progresso visual
-                st.progress((passo_atual - 1) / 8.0, text=f"Etapa {passo_atual}/9")
+                st.progress((passo_atual - 1) / 5.0, text=f"Etapa {passo_atual}/6")
 
                 # Histórico colapsado
                 with st.expander("📜 Histórico de transições"):
@@ -848,14 +925,15 @@ with aba3:
             _step_entry = _steps_data.get(passo_atual) or _steps_data.get(str(passo_atual)) or {}
             step_dados_salvos = _step_entry.get("dados") or {}
 
-            # P4: fluxo especial fora de form — chama a API diretamente sem colar JSON manualmente
+            # Passo 3: fluxo especial fora de form — chama a API diretamente sem colar JSON manualmente
             if _caso_concluido:
                 pass  # Formulário não renderizado para caso concluído
-            elif passo_atual == 4:
+            elif passo_atual == 3:
+                _lbl("Pergunta para o TaxMind", "Formule a pergunta tributária que deseja que o TaxMind analise com base na legislação. Quanto mais específica a pergunta, mais precisa será a análise.")
                 query_analise = st.text_area(
-                    "Pergunta para o TaxMind",
-                    placeholder="Ex: Qual a alíquota do IBS para serviços de TI sob Lucro Presumido?",
+                    "Pergunta",
                     height=80,
+                    label_visibility="collapsed",
                 )
                 if st.button("Analisar →", type="primary"):
                     if not query_analise or len(query_analise.strip()) < 10:
@@ -868,6 +946,7 @@ with aba3:
                                     json={
                                         "query": query_analise,
                                         "excluir_tipos": [] if incluir_outros else ["Outro"],
+                                        "case_id": case_id_input,
                                     },
                                     timeout=60.0,
                                 )
@@ -885,7 +964,7 @@ with aba3:
                                     st.warning(analise["disclaimer"])
 
                                 step_resp = httpx.post(
-                                    f"{API_BASE}/v1/cases/{case_id_input}/steps/4",
+                                    f"{API_BASE}/v1/cases/{case_id_input}/steps/3",
                                     json={"dados": {"query_analise": query_analise, "analise_result": analise}, "acao": "avancar"},
                                     timeout=30.0,
                                 )
@@ -905,105 +984,124 @@ with aba3:
                     dados_passo = {}
 
                     if passo_atual == 1:
-                        dados_passo["titulo"] = st.text_input("Nome do caso", value=step_dados_salvos.get("titulo", caso["titulo"]))
-                        dados_passo["descricao"] = st.text_area("Descreva o problema tributário", value=step_dados_salvos.get("descricao", ""))
-                        dados_passo["contexto_fiscal"] = st.text_input("Situação atual da empresa", value=step_dados_salvos.get("contexto_fiscal", ""))
+                        # Passo 1: Registrar & Classificar (merged old P1 + P2)
+                        _lbl("Nome do caso (mín. 10 chars)", "Identificação única do caso. Deve ter no mínimo 10 caracteres.")
+                        dados_passo["titulo"] = st.text_input("Nome do caso", value=step_dados_salvos.get("titulo", caso["titulo"]), label_visibility="collapsed")
+                        _lbl("Descreva o problema tributário", "Explique a questão tributária que precisa ser analisada, incluindo o contexto e as dúvidas principais.")
+                        dados_passo["descricao"] = st.text_area("Descreva o problema", value=step_dados_salvos.get("descricao", ""), label_visibility="collapsed")
+                        _lbl("Situação atual da empresa", "Regime tributário, porte, setor de atuação e outras informações relevantes sobre a empresa.")
+                        dados_passo["contexto_fiscal"] = st.text_input("Situação atual", value=step_dados_salvos.get("contexto_fiscal", ""), label_visibility="collapsed")
+                        _prem_salvas = step_dados_salvos.get("premissas", ["", "", ""])
+                        _lbl("O que sabemos — premissa 1", "Fato ou dado concreto que embasa a análise. Registre aqui informações confirmadas sobre o caso.")
+                        premissa1 = st.text_input("Premissa 1", value=_prem_salvas[0] if len(_prem_salvas) > 0 else "", label_visibility="collapsed")
+                        _lbl("O que sabemos — premissa 2", "Segundo fato ou dado que influencia a análise.")
+                        premissa2 = st.text_input("Premissa 2", value=_prem_salvas[1] if len(_prem_salvas) > 1 else "", label_visibility="collapsed")
+                        _lbl("O que sabemos — premissa 3 (opcional)", "Premissa adicional, se houver. Deixe em branco se não aplicável.")
+                        premissa3 = st.text_input("Premissa 3", value=_prem_salvas[2] if len(_prem_salvas) > 2 else "", label_visibility="collapsed")
+                        dados_passo["premissas"] = [p for p in [premissa1, premissa2, premissa3] if p.strip()]
+                        _lbl("Período de referência", "Intervalo de tempo ao qual o caso se refere (mês/ano de início e fim).")
+                        dados_passo["periodo_fiscal"] = st.text_input("Período", value=step_dados_salvos.get("periodo_fiscal", ""), label_visibility="collapsed")
 
                     elif passo_atual == 2:
-                        _prem_salvas = step_dados_salvos.get("premissas", ["", "", ""])
-                        premissa1 = st.text_input("O que sabemos — premissa 1", value=_prem_salvas[0] if len(_prem_salvas) > 0 else "")
-                        premissa2 = st.text_input("O que sabemos — premissa 2", value=_prem_salvas[1] if len(_prem_salvas) > 1 else "")
-                        premissa3 = st.text_input("O que sabemos — premissa 3 (opcional)", value=_prem_salvas[2] if len(_prem_salvas) > 2 else "")
-                        dados_passo["premissas"] = [p for p in [premissa1, premissa2, premissa3] if p.strip()]
-                        dados_passo["periodo_fiscal"] = st.text_input("Período de referência", placeholder="Ex: 2025-01 a 2025-12", value=step_dados_salvos.get("periodo_fiscal", ""))
-
-                    elif passo_atual == 3:
-                        risco1 = st.text_input("Risco mapeado 1")
-                        risco2 = st.text_input("Risco mapeado 2 (opcional)")
+                        # Passo 2: Estruturar riscos e dados (old P3)
+                        _lbl("Risco mapeado 1", "Principal risco tributário identificado neste caso. Descreva o cenário de risco e suas possíveis consequências.")
+                        risco1 = st.text_input("Risco 1", label_visibility="collapsed")
+                        _lbl("Risco mapeado 2 (opcional)", "Segundo risco, se houver. Deixe em branco se não aplicável.")
+                        risco2 = st.text_input("Risco 2", label_visibility="collapsed")
                         dados_passo["riscos"] = [r for r in [risco1, risco2] if r.strip()]
                         qualidade_opcoes = {
                             "🟢 Verde — dados completos e consistentes": "verde",
                             "🟡 Amarelo — dados parciais, análise com ressalva": "amarelo",
                             "🔴 Vermelho — dados insuficientes, análise bloqueada": "vermelho",
                         }
+                        _lbl("Avaliação dos dados disponíveis", "Avalie se os dados e documentos disponíveis são suficientes para uma análise confiável. Verde = tudo completo, Amarelo = parcialmente disponível, Vermelho = faltam dados essenciais.")
                         qualidade_label = st.selectbox(
-                            "Avaliação dos dados disponíveis",
+                            "Avaliação",
                             options=list(qualidade_opcoes.keys()),
                             index=0,
+                            label_visibility="collapsed",
                         )
                         dados_passo["dados_qualidade"] = qualidade_opcoes[qualidade_label]
 
-                    elif passo_atual == 5:
-                        st.info("Esta é a sua posição — registre ANTES de ver a recomendação do TaxMind (P6).")
+                    elif passo_atual == 4:
+                        # Passo 4: Posição do gestor — hipótese (old P5)
+                        st.info("Esta é a sua posição — registre ANTES de ver a recomendação do TaxMind (Passo 5).")
+                        _lbl("Nossa posição antes da análise", "Registre aqui a posição do gestor tributário ANTES de ver a recomendação da IA. Isso garante independência decisória e permite comparação posterior.")
                         dados_passo["hipotese_gestor"] = st.text_area(
-                            "Nossa posição antes da análise",
-                            placeholder="Descreva sua posição independente sobre como resolver este caso...",
+                            "Hipótese",
                             height=120,
                             value=step_dados_salvos.get("hipotese_gestor", ""),
+                            label_visibility="collapsed",
                         )
 
-                    elif passo_atual == 6:
-                        # Auto-preencher com análise do P4 se campo vazio
+                    elif passo_atual == 5:
+                        # Passo 5: Decidir (merged old P6 + P7)
+                        # Auto-preencher recomendacao com análise do Passo 3 se campo vazio
                         _rec_salva = step_dados_salvos.get("recomendacao", "")
                         if not _rec_salva:
-                            _p4_entry = _steps_data.get(4) or _steps_data.get("4") or {}
-                            _p4_dados = _p4_entry.get("dados") or {}
-                            _analise_p4 = _p4_dados.get("analise_result") or {}
+                            _p3_entry = _steps_data.get(3) or _steps_data.get("3") or {}
+                            _p3_dados = _p3_entry.get("dados") or {}
+                            _analise_p3 = _p3_dados.get("analise_result") or {}
                             _partes = []
-                            if _analise_p4.get("resposta"):
-                                _partes.append(_analise_p4["resposta"])
-                            if _analise_p4.get("acao_recomendada"):
-                                _partes.append(f"Ação recomendada: {_analise_p4['acao_recomendada']}")
-                            if _analise_p4.get("impacto_financeiro"):
-                                _partes.append(f"Impacto financeiro: {_analise_p4['impacto_financeiro']}")
-                            if _analise_p4.get("fundamento_legal"):
-                                _partes.append(f"Base legal: {', '.join(_analise_p4['fundamento_legal'])}")
+                            if _analise_p3.get("resposta"):
+                                _partes.append(_analise_p3["resposta"])
+                            if _analise_p3.get("acao_recomendada"):
+                                _partes.append(f"Ação recomendada: {_analise_p3['acao_recomendada']}")
+                            if _analise_p3.get("impacto_financeiro"):
+                                _partes.append(f"Impacto financeiro: {_analise_p3['impacto_financeiro']}")
+                            if _analise_p3.get("fundamento_legal"):
+                                _partes.append(f"Base legal: {', '.join(_analise_p3['fundamento_legal'])}")
                             # Fallback: campos do SYSTEM_PROMPT antigo
                             if not _partes:
-                                if _analise_p4.get("contra_tese"):
-                                    _partes.append(_analise_p4["contra_tese"])
-                                if _analise_p4.get("disclaimer"):
-                                    _partes.append(_analise_p4["disclaimer"])
+                                if _analise_p3.get("contra_tese"):
+                                    _partes.append(_analise_p3["contra_tese"])
+                                if _analise_p3.get("disclaimer"):
+                                    _partes.append(_analise_p3["disclaimer"])
                             _rec_salva = "\n\n".join(_partes)
 
                         if _rec_salva:
-                            st.info("Recomendação gerada automaticamente pelo TaxMind com base na análise do P4. Edite se necessário antes de avançar.")
+                            st.info("Recomendação gerada automaticamente pelo TaxMind com base na análise do Passo 3. Edite se necessário antes de avançar.")
                         else:
-                            st.warning("Não foi possível recuperar a análise do P4. Preencha a recomendação manualmente ou volte ao P4 e refaça a análise.")
+                            st.warning("Não foi possível recuperar a análise do Passo 3. Preencha a recomendação manualmente ou volte ao Passo 3 e refaça a análise.")
+                        _lbl("Recomendação TaxMind", "Recomendação gerada automaticamente pela IA com base na análise do Passo 3. Revise e edite se necessário antes de registrar sua decisão.")
                         dados_passo["recomendacao"] = st.text_area(
-                            "Recomendação TaxMind",
+                            "Recomendação",
                             height=200,
                             value=_rec_salva,
+                            label_visibility="collapsed",
                         )
-
-                    elif passo_atual == 7:
+                        st.divider()
                         st.warning("⚠️ A decisão final será comparada com a recomendação da IA para verificação de independência decisória.")
+                        _lbl("Decisão tomada", "Registre a decisão efetivamente tomada pela equipe. Será comparada com a recomendação da IA para verificar independência decisória.")
                         dados_passo["decisao_final"] = st.text_area(
-                            "Decisão tomada",
+                            "Decisão",
                             height=120,
                             value=step_dados_salvos.get("decisao_final", ""),
+                            label_visibility="collapsed",
                         )
-                        dados_passo["decisor"] = st.text_input("Responsável pela decisão", value=step_dados_salvos.get("decisor", ""))
+                        _lbl("Responsável pela decisão", "Nome do profissional ou gestor que tomou a decisão final sobre este caso.")
+                        dados_passo["decisor"] = st.text_input("Decisor", value=step_dados_salvos.get("decisor", ""), label_visibility="collapsed")
 
-                    elif passo_atual == 8:
-                        dados_passo["resultado_real"] = st.text_area("O que aconteceu na prática", height=80, value=step_dados_salvos.get("resultado_real", ""))
+                    elif passo_atual == 6:
+                        # Passo 6: Ciclo Pós-Decisão (merged old P8 + P9)
+                        _lbl("O que aconteceu na prática", "Descreva o resultado efetivo após a implementação da decisão. Isso alimenta o aprendizado para casos futuros.")
+                        dados_passo["resultado_real"] = st.text_area("Resultado", height=80, value=step_dados_salvos.get("resultado_real", ""), label_visibility="collapsed")
+                        _lbl("Data para revisão", "Data futura para reavaliação do caso. Formato: dd-mm-aaaa.")
                         dados_passo["data_revisao"] = st.text_input(
-                            "Data para revisão",
-                            placeholder="dd-mm-aaaa",
-                            help="Formato: dia-mês-ano. Ex: 01-09-2025",
+                            "Data revisão",
                             value=step_dados_salvos.get("data_revisao", ""),
+                            label_visibility="collapsed",
                         )
-
-                    elif passo_atual == 9:
+                        _lbl("O que aprendemos com este caso", "Registre lições aprendidas, erros a evitar e boas práticas identificadas. Este registro será útil para decisões similares no futuro.")
                         dados_passo["aprendizado_extraido"] = st.text_area(
-                            "O que aprendemos com este caso",
-                            placeholder="Registre o aprendizado para casos futuros...",
+                            "Aprendizado",
                             height=100,
                             value=step_dados_salvos.get("aprendizado_extraido", ""),
+                            label_visibility="collapsed",
                         )
 
-                    # BUG-13 — botão diferente no passo terminal P9
-                    PASSO_TERMINAL = 9
+                    # BUG-13 — botão diferente no passo terminal (Passo 6)
+                    PASSO_TERMINAL = 6
                     col_av, col_vo = st.columns([2, 1])
                     with col_av:
                         _label_btn = "✅ Concluir Caso" if passo_atual == PASSO_TERMINAL else "Avançar →"
@@ -1013,8 +1111,8 @@ with aba3:
 
                 if not _caso_concluido and (btn_avancar or btn_voltar):
                     acao = "avancar" if btn_avancar else "voltar"
-                    # BUG-12 — validar data em P8 antes de chamar API
-                    if btn_avancar and passo_atual == 8:
+                    # BUG-12 — validar data em Passo 6 antes de chamar API
+                    if btn_avancar and passo_atual == 6:
                         _data_rev = dados_passo.get("data_revisao", "")
                         if _data_rev and not re.match(r"^\d{2}-\d{2}-\d{4}$", _data_rev):
                             st.error("Data inválida. Use o formato dd-mm-aaaa")
@@ -1044,14 +1142,14 @@ with aba3:
                         d2 = r2.json()
                         novo_passo = d2["passo"]
 
-                        if passo_atual == 9:
+                        if passo_atual == 6:
                             st.success("✅ **Caso concluído com sucesso!**")
                             st.balloons()
                             st.info(
                                 "**Próximos passos:**\n\n"
                                 "- Acesse a aba **Documentos** para gerar o Dossiê de Decisão ou outros documentos formais\n"
                                 "- Volte à aba **Consultar** para fazer novas análises\n"
-                                "- Ou crie um **novo caso** no Protocolo P1→P9"
+                                "- Ou crie um **novo caso** no Protocolo de Decisão"
                             )
                         else:
                             st.success(f"✅ Avançado para {PASSO_NOME.get(novo_passo, str(novo_passo))}")
@@ -1128,48 +1226,109 @@ CLASSES_OPCOES = [
 with aba4:
     st.title("Documentos Acionáveis")
     st.caption(
-        "Gere, aprove e compartilhe documentos tributários estruturados vinculados ao Protocolo P1→P9. "
+        "Gere, aprove e compartilhe documentos tributários estruturados vinculados ao Protocolo de Decisão. "
         "Aviso legal obrigatório e não removível em toda saída."
     )
+
+    # --- Carregar lista de cases do backend ---
+    _cases_list = []
+    try:
+        _resp_cases = httpx.get(f"{API_BASE}/v1/cases", timeout=10)
+        if _resp_cases.status_code == 200:
+            _cases_list = _resp_cases.json()
+    except Exception:
+        pass
+
+    # --- Seleção de caso ---
+    _STATUS_LABEL = {
+        "rascunho": "Rascunho", "em_analise": "Em Análise",
+        "aguardando_hipotese": "Aguardando Hipótese", "decidido": "Decidido",
+        "em_monitoramento": "Monitoramento", "aprendizado_extraido": "Concluído",
+    }
+    if _cases_list:
+        _case_options = {
+            f"#{c['case_id']}  |  {c['titulo'][:55]}  |  P{c['passo_atual']} — {_STATUS_LABEL.get(c['status'], c['status'])}": c["case_id"]
+            for c in _cases_list
+        }
+        _lbl("Selecione o caso", "Escolha o caso do Protocolo de Decisão para o qual deseja gerar ou visualizar documentos.")
+        _case_sel = st.selectbox(
+            "Selecione o caso",
+            options=list(_case_options.keys()),
+            key="out_case_select",
+            label_visibility="collapsed",
+        )
+        case_id_out = _case_options[_case_sel]
+    else:
+        st.info("Nenhum caso encontrado. Crie um caso na aba **Protocolo de Decisão**.")
+        case_id_out = 1
+
+    st.divider()
 
     col_esq, col_dir = st.columns([1, 3])
 
     with col_esq:
         st.subheader("Filtros")
-        case_id_out = st.number_input("Número do caso", min_value=1, step=1, value=1, key="out_case_id")
+
+        _lbl("Tipo de documento", "Filtre por tipo: Alerta, Nota de Trabalho, Recomendação Formal, Dossiê de Decisão ou Material para Compartilhamento.")
         filtro_classe = st.multiselect(
-            "Tipo de documento", options=CLASSES_OPCOES,
+            "Tipo", options=CLASSES_OPCOES,
             format_func=lambda x: CLASSE_LABEL.get(x, x),
             default=CLASSES_OPCOES, key="out_filtro_classe",
+            label_visibility="collapsed",
         )
+        _lbl("Status", "Filtre por estado do documento. Gerado = aguardando revisão, Aprovado = validado, Publicado = compartilhado.")
         filtro_status = st.multiselect(
             "Status", options=["rascunho", "gerado", "aprovado", "publicado", "revogado"],
             default=["gerado", "aprovado", "publicado"],
+            label_visibility="collapsed",
         )
         carregar_outputs = st.button("Carregar Documentos", type="primary")
 
         st.divider()
         st.subheader("Gerar Documento")
+
+        # Seleção de classe FORA do form para permitir campos condicionais
+        _lbl("Tipo de documento", "Alerta (urgente), Nota de Trabalho (análise interna), Recomendação Formal (parecer completo), Dossiê de Decisão (consolidado do caso) ou Material para Compartilhamento (versão executiva).")
+        classe_sel = st.selectbox(
+            "Tipo",
+            options=CLASSES_OPCOES,
+            format_func=lambda x: CLASSE_LABEL.get(x, x),
+            key="out_classe_sel",
+            label_visibility="collapsed",
+        )
+
         with st.form("form_gerar_output"):
-            classe_sel = st.selectbox(
-                "Tipo de documento",
-                options=CLASSES_OPCOES,
-                format_func=lambda x: CLASSE_LABEL.get(x, x),
-            )
+            _lbl("Público-alvo", "Selecione para quem o documento será direcionado. O sistema adapta a linguagem e o nível de detalhe para cada público.")
             stk_sel = st.multiselect(
                 "Público-alvo",
                 options=STAKEHOLDERS_OPCOES,
                 format_func=lambda x: STAKEHOLDER_LABEL.get(x, x),
+                label_visibility="collapsed",
             )
 
-            # Campos condicionais por classe (mostrar todos — simplificado)
-            query_out = st.text_area("Consulta (Nota de Trabalho / Recomendação Formal)", height=60,
-                placeholder="Ex: Alíquota IBS para serviços de saúde")
-            titulo_out = st.text_input("Título (Alerta)",
-                placeholder="Ex: Alerta prazo recolhimento IBS")
-            contexto_out = st.text_area("Contexto (Alerta)", height=60)
-            mat_out = st.slider("Nível de prioridade (Alerta)", min_value=1, max_value=5, value=3)
-            base_id_out = st.number_input("ID do documento base (Material Compartilhável)", min_value=0, step=1, value=0)
+            # Campos condicionais — só mostra o que é relevante para a classe
+            query_out = ""
+            titulo_out = ""
+            contexto_out = ""
+            mat_out = 3
+            base_id_out = 0
+
+            if classe_sel in ("nota_trabalho", "recomendacao_formal"):
+                _tipo_label = CLASSE_LABEL.get(classe_sel, classe_sel)
+                _lbl(f"Consulta ({_tipo_label})", f"Pergunta tributária que será analisada para gerar a {_tipo_label}. O sistema buscará na legislação e produzirá o documento.")
+                query_out = st.text_area("Consulta", height=60, label_visibility="collapsed")
+            elif classe_sel == "alerta":
+                _lbl("Título", "Título curto e descritivo para o alerta tributário.")
+                titulo_out = st.text_input("Título", label_visibility="collapsed")
+                _lbl("Contexto", "Descreva a situação que motivou o alerta e as informações relevantes para compreensão.")
+                contexto_out = st.text_area("Contexto", height=60, label_visibility="collapsed")
+                _lbl("Nível de prioridade", "De 1 (baixa) a 5 (crítica). Indica a urgência e o impacto potencial do alerta.")
+                mat_out = st.slider("Prioridade", min_value=1, max_value=5, value=3, label_visibility="collapsed")
+            elif classe_sel == "dossie_decisao":
+                st.info("O Dossiê de Decisão é gerado automaticamente a partir do caso (requer Passo 5 — Decidir concluído).")
+            elif classe_sel == "material_compartilhavel":
+                _lbl("ID do documento base", "Informe o número (ID) de uma Recomendação Formal ou Dossiê de Decisão já aprovado. O material compartilhável será gerado a partir desse documento.")
+                base_id_out = st.number_input("ID base", min_value=0, step=1, value=0, label_visibility="collapsed")
 
             gerar_btn = st.form_submit_button("Gerar Documento", type="primary")
 
@@ -1274,20 +1433,26 @@ with aba4:
                                     "contexto": "Contexto",
                                     "hipotese_gestor": "Hipótese do gestor",
                                 }
+                                def _escape_latex(txt: str) -> str:
+                                    """Escapa $ para evitar renderização LaTeX no Streamlit."""
+                                    if not isinstance(txt, str):
+                                        return str(txt)
+                                    return txt.replace("$", r"\$")
+
                                 for chave in ["recomendacao_principal", "resposta", "decisao_final",
                                               "contexto", "hipotese_gestor"]:
                                     if conteudo.get(chave):
                                         st.markdown(f"**{_CHAVE_LABEL.get(chave, chave)}**")
-                                        st.write(conteudo[chave])
+                                        st.markdown(_escape_latex(conteudo[chave]))
                                         break
 
                                 if conteudo.get("fundamento_legal"):
                                     st.markdown("**Base legal**")
                                     for art in conteudo["fundamento_legal"]:
-                                        st.write(f"- {art}")
+                                        st.markdown(f"- {_escape_latex(art)}")
 
                                 # Aviso legal em destaque (não colapsável)
-                                st.warning(f"⚠️ **Aviso legal:**\n\n{out['disclaimer']}")
+                                st.warning(f"⚠️ **Aviso legal:**\n\n{_escape_latex(out['disclaimer'])}")
 
                                 # Views por público-alvo
                                 views = out.get("stakeholder_views", [])
@@ -1297,7 +1462,7 @@ with aba4:
                                     stk_tabs = st.tabs(tabs_labels)
                                     for tab, view in zip(stk_tabs, views):
                                         with tab:
-                                            st.write(view["resumo"])
+                                            st.markdown(_escape_latex(view["resumo"]))
 
                                 if out.get("versao_prompt"):
                                     st.divider()
@@ -1358,12 +1523,15 @@ with aba4:
 
 
 # ===========================================================================
-# ABA 5 — Qualidade do Sistema
+# ABA 5 — Qualidade do Sistema (oculta — uso interno)
 # ===========================================================================
-MODEL_DEV_UI = "claude-haiku-4-5-20251001"
-PROMPT_VERSION_UI = "v1.0.0-sprint2"
+# MODEL_DEV_UI = "claude-haiku-4-5-20251001"
+# PROMPT_VERSION_UI = "v1.0.0-sprint2"
+#
+# Para reativar, descomentar o bloco abaixo e restaurar aba5 na linha de st.tabs()
 
-with aba5:
+if False:  # noqa: Aba oculta durante fase de testes com usuários
+    aba5 = None  # placeholder
     st.title("Qualidade do Sistema")
     st.caption("Monitoramento contínuo, detecção de variações e validação automática do TaxMind Light.")
 

@@ -2,10 +2,10 @@
 outputs/engine.py — OutputEngine: geração e gestão das 5 classes de output.
 
 Classes:
-  C1 — Alerta            (P3 ou P8, sistema automático)
-  C2 — Nota de Trabalho  (P4, analista)
-  C3 — Recomendação      (P6, motor cognitivo)
-  C4 — Dossiê de Decisão (P7, compilação automática)
+  C1 — Alerta            (P2 ou P6, sistema automático)
+  C2 — Nota de Trabalho  (P3, analista)
+  C3 — Recomendação      (P3, motor cognitivo)
+  C4 — Dossiê de Decisão (P5, compilação automática)
   C5 — Material Compartilhável (derivado de C3/C4 aprovado)
 """
 
@@ -179,9 +179,9 @@ class OutputEngine:
         materialidade: int,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
-        """Gera Alerta (C1) a partir de P3 ou P8."""
-        if passo not in (3, 8):
-            raise OutputError("Alerta (C1) só pode ser gerado em P3 ou P8")
+        """Gera Alerta (C1) a partir de P2 ou P6."""
+        if passo not in (2, 6):
+            raise OutputError("Alerta (C1) só pode ser gerado em P2 ou P6")
         if not 1 <= materialidade <= 5:
             raise OutputError("materialidade deve estar entre 1 e 5")
         _assert_disclaimer(DISCLAIMER_PADRAO)
@@ -209,7 +209,7 @@ class OutputEngine:
         analise_result: AnaliseResult,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
-        """Gera Nota de Trabalho (C2) a partir de AnaliseResult do P4."""
+        """Gera Nota de Trabalho (C2) a partir de AnaliseResult do P3."""
         if analise_result is None:
             raise OutputError("analise_result é obrigatório para Nota de Trabalho (C2)")
         if not analise_result.query:
@@ -244,7 +244,7 @@ class OutputEngine:
         conn = _get_conn()
         try:
             output_id = _insert_output(
-                conn, case_id, 4, OutputClass.NOTA_TRABALHO,
+                conn, case_id, 3, OutputClass.NOTA_TRABALHO,
                 titulo, conteudo, materialidade, DISCLAIMER_PADRAO,
                 analise_result.prompt_version, BASE_VERSION,
             )
@@ -263,7 +263,7 @@ class OutputEngine:
         analise_result: AnaliseResult,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
-        """Gera Recomendação Formal (C3) a partir de AnaliseResult do P6."""
+        """Gera Recomendação Formal (C3) a partir de AnaliseResult do P3."""
         if analise_result is None:
             raise OutputError("analise_result é obrigatório para Recomendação Formal (C3)")
         if not analise_result.query:
@@ -294,7 +294,7 @@ class OutputEngine:
         conn = _get_conn()
         try:
             output_id = _insert_output(
-                conn, case_id, 6, OutputClass.RECOMENDACAO_FORMAL,
+                conn, case_id, 3, OutputClass.RECOMENDACAO_FORMAL,
                 titulo, conteudo, materialidade, DISCLAIMER_PADRAO,
                 analise_result.prompt_version, BASE_VERSION,
             )
@@ -313,25 +313,25 @@ class OutputEngine:
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
         """
-        Gera Dossiê (C4) compilando P2+P5+P6+P7.
-        Requer P7 concluído.
+        Gera Dossiê (C4) compilando P1+P4+P5.
+        Requer P5 concluído.
         """
         conn = _get_conn()
         try:
             cur = conn.cursor()
 
-            # Verificar P7 concluído
+            # Verificar P5 concluído
             cur.execute(
-                "SELECT concluido, dados FROM case_steps WHERE case_id=%s AND passo=7",
+                "SELECT concluido, dados FROM case_steps WHERE case_id=%s AND passo=5",
                 (case_id,),
             )
             row = cur.fetchone()
             if not row or not row[0]:
-                raise OutputError("Dossiê (C4) requer P7 (Decidir) concluído")
+                raise OutputError("Dossiê (C4) requer P5 (Decidir) concluído")
 
             # Coletar dados dos passos relevantes
             passos_dados = {}
-            for p in (2, 5, 6, 7):
+            for p in (1, 2, 3, 4, 5):
                 cur.execute(
                     "SELECT dados FROM case_steps WHERE case_id=%s AND passo=%s",
                     (case_id, p),
@@ -348,12 +348,12 @@ class OutputEngine:
             titulo = f"Dossiê de Decisão — {titulo_caso[:80]}"
             conteudo = {
                 "titulo_caso": titulo_caso,
-                "premissas": passos_dados.get(2, {}).get("premissas", []),
-                "periodo_fiscal": passos_dados.get(2, {}).get("periodo_fiscal", ""),
-                "hipotese_gestor": passos_dados.get(5, {}).get("hipotese_gestor", ""),
-                "recomendacao": passos_dados.get(6, {}).get("recomendacao", ""),
-                "decisao_final": passos_dados.get(7, {}).get("decisao_final", ""),
-                "decisor": passos_dados.get(7, {}).get("decisor", ""),
+                "premissas": passos_dados.get(1, {}).get("premissas", []),
+                "periodo_fiscal": passos_dados.get(1, {}).get("periodo_fiscal", ""),
+                "hipotese_gestor": passos_dados.get(4, {}).get("hipotese_gestor", ""),
+                "recomendacao": passos_dados.get(5, {}).get("recomendacao", ""),
+                "decisao_final": passos_dados.get(5, {}).get("decisao_final", ""),
+                "decisor": passos_dados.get(5, {}).get("decisor", ""),
                 "versao_prompt": PROMPT_VERSION,
                 "versao_base": BASE_VERSION,
             }
@@ -364,7 +364,7 @@ class OutputEngine:
             materialidade = self._mat_calc.calcular(contexto_mat)
 
             output_id = _insert_output(
-                conn, case_id, 7, OutputClass.DOSSIE_DECISAO,
+                conn, case_id, 5, OutputClass.DOSSIE_DECISAO,
                 titulo, conteudo, materialidade, DISCLAIMER_PADRAO,
                 PROMPT_VERSION, BASE_VERSION,
             )
@@ -424,7 +424,7 @@ class OutputEngine:
             materialidade = self._mat_calc.calcular({"titulo": titulo})
 
             new_output_id = _insert_output(
-                conn, case_id, 7, OutputClass.MATERIAL_COMPARTILHAVEL,
+                conn, case_id, 5, OutputClass.MATERIAL_COMPARTILHAVEL,
                 titulo, conteudo, materialidade, DISCLAIMER_PADRAO,
                 PROMPT_VERSION, BASE_VERSION,
             )

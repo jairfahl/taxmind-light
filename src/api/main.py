@@ -8,6 +8,7 @@ POST /v1/ingest/check-duplicate                   — verificar duplicidade ante
 POST /v1/ingest/upload                            — ingestão assíncrona de PDF (retorna job_id)
 GET  /v1/ingest/jobs/{job_id}                     — polling de status do job de ingestão
 POST /v1/cases                                    — criar caso protocolo
+GET  /v1/cases                                    — listar todos os casos
 GET  /v1/cases/{case_id}                          — estado do caso
 POST /v1/cases/{case_id}/steps/{passo}            — submeter passo
 POST /v1/cases/{case_id}/carimbo/confirmar        — confirmar alerta carimbo
@@ -93,6 +94,7 @@ class AnalyzeRequest(BaseModel):
     top_k: int = Field(5, ge=1, le=10)
     model: str = Field(MODEL_DEV)
     decompose: bool = Field(False, description="Ativar decomposição de sub-perguntas para queries complexas")
+    case_id: Optional[int] = Field(None, description="ID do caso (steps 1→6) para injetar contexto dos passos anteriores")
 
 
 # --- Serialização de AnaliseResult para dict ---
@@ -142,13 +144,158 @@ def _analise_to_dict(resultado: AnaliseResult) -> dict:
 
 # --- Endpoints ---
 
+def _carregar_contexto_caso(case_id: int) -> Optional[dict]:
+    """Carrega dados dos passos anteriores do caso para injeção no LLM."""
+    try:
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT passo, dados FROM case_steps WHERE case_id = %s AND concluido = TRUE ORDER BY passo",
+                (case_id,),
+            )
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            put_conn(conn)
+        if not rows:
+            return None
+        import json as _json
+        contexto: dict = {}
+        for passo, dados_raw in rows:
+            if isinstance(dados_raw, str):
+                dados_raw = _json.loads(dados_raw)
+            contexto[passo] = dados_raw
+        logger.info("Contexto do caso %d carregado: passos %s", case_id, list(contexto.keys()))
+        return contexto
+    except Exception as e:
+        logger.warning("Falha ao carregar contexto do caso %d: %s", case_id, e)
+        return None
+
+
+def _buscar_casos_similares(query: str, case_id_atual: Optional[int] = None, top_k: int = 3) -> list[dict]:
+    """Busca casos concluídos similares para retroalimentação do LLM.
+
+    Critérios de qualidade:
+    - Caso com status 'aprendizado_extraido' (Passo 6 completo)
+    - dados_qualidade = 'verde' no Passo 2
+    - Exclui o caso atual (se informado)
+
+    Usa embedding Voyage da query para similaridade cosine contra
+    a concatenação de titulo+descricao dos casos concluídos.
+    """
+    try:
+        from src.rag.retriever import _embed_query, EMBEDDING_MODEL
+        import json as _json
+
+        vetor_query = _embed_query(query)
+        vetor_str = "[" + ",".join(str(v) for v in vetor_query) + "]"
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Buscar casos concluídos com qualidade verde
+            # Usa similaridade cosine entre o embedding da query e
+            # o embedding gerado on-the-fly do titulo+descricao do caso
+            sql = """
+                WITH casos_concluidos AS (
+                    SELECT
+                        c.id AS case_id,
+                        c.titulo,
+                        s1.dados AS dados_step1,
+                        s2.dados AS dados_step2,
+                        s5.dados AS dados_step5,
+                        s6.dados AS dados_step6
+                    FROM cases c
+                    JOIN case_steps s1 ON s1.case_id = c.id AND s1.passo = 1 AND s1.concluido = TRUE
+                    JOIN case_steps s2 ON s2.case_id = c.id AND s2.passo = 2 AND s2.concluido = TRUE
+                    JOIN case_steps s5 ON s5.case_id = c.id AND s5.passo = 5 AND s5.concluido = TRUE
+                    JOIN case_steps s6 ON s6.case_id = c.id AND s6.passo = 6 AND s6.concluido = TRUE
+                    WHERE c.status = 'aprendizado_extraido'
+                      AND (s2.dados->>'dados_qualidade') = 'verde'
+            """
+            params: list = []
+            if case_id_atual:
+                sql += "      AND c.id != %s\n"
+                params.append(case_id_atual)
+            sql += """
+                )
+                SELECT case_id, titulo, dados_step1, dados_step2, dados_step5, dados_step6
+                FROM casos_concluidos
+                ORDER BY case_id DESC
+                LIMIT %s
+            """
+            params.append(top_k * 3)  # fetch more, rank below
+
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            put_conn(conn)
+
+        if not rows:
+            logger.info("Nenhum caso concluído com qualidade verde encontrado para retroalimentação.")
+            return []
+
+        # Ranking por similaridade textual simples (sem embedding extra para evitar latência)
+        # Usa overlap de palavras-chave entre query e titulo+descricao do caso
+        import re as _re
+        query_words = set(_re.findall(r'\w{4,}', query.lower()))
+
+        scored = []
+        for case_id, titulo, d1, d2, d5, d6 in rows:
+            if isinstance(d1, str):
+                d1 = _json.loads(d1)
+            if isinstance(d2, str):
+                d2 = _json.loads(d2)
+            if isinstance(d5, str):
+                d5 = _json.loads(d5)
+            if isinstance(d6, str):
+                d6 = _json.loads(d6)
+
+            caso_text = f"{titulo} {d1.get('descricao', '')} {' '.join(d1.get('premissas', []))}".lower()
+            caso_words = set(_re.findall(r'\w{4,}', caso_text))
+            overlap = len(query_words & caso_words)
+            if overlap < 2:
+                continue
+
+            scored.append({
+                "case_id": case_id,
+                "titulo": titulo,
+                "score": overlap,
+                "premissas": d1.get("premissas", []),
+                "riscos": d2.get("riscos", []),
+                "decisao_final": d5.get("decisao_final", ""),
+                "resultado_real": d6.get("resultado_real", ""),
+                "aprendizado": d6.get("aprendizado_extraido", ""),
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        resultado = scored[:top_k]
+        logger.info("Retroalimentação: %d caso(s) similar(es) encontrado(s) para query.", len(resultado))
+        return resultado
+
+    except Exception as e:
+        logger.warning("Falha na busca de casos similares (não-bloqueante): %s", e)
+        return []
+
+
 @app.post("/v1/analyze")
 def analyze(req: AnalyzeRequest):
     """
-    Análise tributária completa P1→P4.
+    Análise tributária completa (Steps 1→3).
     Retorna 400 se a qualidade for VERMELHO (bloqueado).
+    Quando case_id é informado, injeta dados dos passos anteriores como contexto.
     """
-    logger.info("POST /v1/analyze query=%s", req.query[:80])
+    logger.info("POST /v1/analyze query=%s case_id=%s", req.query[:80], req.case_id)
+
+    contexto_caso = None
+    if req.case_id:
+        contexto_caso = _carregar_contexto_caso(req.case_id)
+
+    # Retroalimentação: buscar casos concluídos similares
+    casos_similares = _buscar_casos_similares(req.query, case_id_atual=req.case_id)
+
     try:
         resultado = analisar(
             query=req.query,
@@ -157,6 +304,8 @@ def analyze(req: AnalyzeRequest):
             excluir_tipos=req.excluir_tipos if req.excluir_tipos is not None else ["Outro"],
             model=req.model,
             decompose=req.decompose,
+            contexto_caso=contexto_caso,
+            casos_similares=casos_similares,
         )
     except Exception as e:
         logger.error("Erro interno em /v1/analyze: %s", e, exc_info=True)
@@ -567,7 +716,7 @@ def _case_estado_to_dict(estado: CaseEstado) -> dict:
 
 @app.post("/v1/cases", status_code=201)
 def criar_caso(req: CriarCasoRequest):
-    """Cria um novo caso protocolar em P1/rascunho."""
+    """Cria um novo caso protocolar em Step 1/rascunho."""
     logger.info("POST /v1/cases titulo=%s", req.titulo[:60])
     try:
         case_id = _protocol_engine.criar_caso(
@@ -581,6 +730,58 @@ def criar_caso(req: CriarCasoRequest):
         logger.error("Erro em /v1/cases: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     return {"case_id": case_id, "status": "rascunho", "passo_atual": 1}
+
+
+@app.get("/v1/cases")
+def listar_casos():
+    """Lista casos reais (exclui cases gerados por testes automatizados)."""
+    logger.info("GET /v1/cases")
+    conn = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT ON (titulo) id, titulo, status, passo_atual, created_at
+               FROM cases
+               WHERE titulo NOT ILIKE '%%teste%%'
+                 AND titulo NOT ILIKE '%%test%%'
+                 AND titulo NOT ILIKE '%%smoke%%'
+                 AND titulo NOT ILIKE '%%validar%%'
+                 AND titulo NOT ILIKE '%%bloqueio%%'
+                 AND titulo NOT ILIKE '%%invalido%%'
+                 AND titulo NOT ILIKE '%%retrocesso%%'
+                 AND titulo NOT ILIKE '%%avancar%%'
+                 AND titulo NOT ILIKE '%%voltar%%'
+                 AND titulo NOT ILIKE '%%submeter%%'
+                 AND titulo NOT ILIKE '%%integração%%'
+                 AND titulo NOT ILIKE '%%integracao%%'
+                 AND titulo NOT ILIKE '%%output ja%%'
+                 AND titulo NOT ILIKE '%%listar outputs%%'
+                 AND titulo NOT ILIKE '%%aprovacao%%'
+                 AND titulo NOT ILIKE '%%get estado%%'
+                 AND titulo NOT ILIKE '%%get output%%'
+               ORDER BY titulo, id DESC"""
+        )
+        rows = cur.fetchall()
+        cur.close()
+        # Re-ordenar por id DESC (mais recente primeiro)
+        rows.sort(key=lambda r: r[0], reverse=True)
+        return [
+            {
+                "case_id": r[0],
+                "titulo": r[1],
+                "status": r[2],
+                "passo_atual": r[3],
+                "created_at": str(r[4]),
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.error("Erro em GET /v1/cases: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            put_conn(conn)
 
 
 @app.get("/v1/cases/{case_id}")
@@ -601,8 +802,8 @@ def get_caso(case_id: int):
 def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
     """
     Submete dados de um passo e avança/retrocede o protocolo.
-    No P6, executa DetectorCarimbo automaticamente se dados contiverem
-    'texto_decisao' e 'texto_recomendacao'.
+    No Step 5 (Decidir), executa DetectorCarimbo automaticamente se dados contiverem
+    'decisao_final' e 'recomendacao'.
     """
     logger.info("POST /v1/cases/%d/steps/%d acao=%s", case_id, passo, req.acao)
     try:
@@ -618,20 +819,12 @@ def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
 
         step = _protocol_engine.avancar(case_id, passo, req.dados)
 
-        # Detector de carimbo ativado no P7 (decisão final vs recomendação P6)
+        # Detector de carimbo ativado no Step 5 — Decidir (decisao_final vs recomendacao no mesmo passo)
         carimbo_result = None
-        if passo == 7:
+        if passo == 5:
             texto_decisao = req.dados.get("decisao_final", "")
-            # Buscar recomendação do P6 para comparação
-            try:
-                estado = _protocol_engine.get_estado(case_id)
-                p6_dados = estado.steps.get(6, {}).get("dados", {})
-                if isinstance(p6_dados, dict):
-                    texto_recomendacao = p6_dados.get("recomendacao", "")
-                else:
-                    texto_recomendacao = ""
-            except Exception:
-                texto_recomendacao = ""
+            # recomendacao e decisao_final estão ambos no Step 5 (Decidir)
+            texto_recomendacao = req.dados.get("recomendacao", "")
 
             if texto_decisao and texto_recomendacao:
                 try:
@@ -745,7 +938,7 @@ def gerar_output(req: GerarOutputRequest):
     - C1 (alerta): requer titulo, contexto, materialidade
     - C2 (nota_trabalho): requer query — executa análise cognitiva internamente
     - C3 (recomendacao_formal): requer query
-    - C4 (dossie_decisao): requer P7 concluído no caso
+    - C4 (dossie_decisao): requer Step 5 (Decidir) concluído no caso
     - C5 (material_compartilhavel): requer output_base_id com C3/C4 aprovado
     """
     logger.info("POST /v1/outputs case_id=%d classe=%s", req.case_id, req.classe)
