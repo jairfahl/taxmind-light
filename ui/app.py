@@ -612,7 +612,7 @@ with aba2:
                             if doc.get("resumo"):
                                 st.caption(doc["resumo"][:200])
                             if doc.get("url"):
-                                st.markdown(f"[Abrir documento]({doc['url']})", unsafe_allow_html=True)
+                                st.markdown(f"[Abrir documento]({doc['url']})")
                         with col_acoes:
                             if st.button("Descartar", key=f"mon_desc_{doc['id']}", type="secondary"):
                                 try:
