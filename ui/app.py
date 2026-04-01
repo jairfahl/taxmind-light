@@ -1,11 +1,12 @@
 """
-ui/app.py — Interface Streamlit para TaxMind Light.
+ui/app.py — Interface Streamlit para Tribus-AI.
 Aba 1: Consultar · Aba 2: Adicionar Norma · Aba 3: Protocolo de Decisão · Aba 4: Documentos · Aba 5: Qualidade do Sistema
 Consome a FastAPI em http://localhost:8000.
 """
 
 import os
 import re
+import sys
 import time
 
 import httpx
@@ -13,6 +14,11 @@ import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Garantir que a raiz do projeto está no path para imports de auth/pages/components
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8020")
 
@@ -41,11 +47,30 @@ def _sanitize_latex(texto: str) -> str:
 
 
 st.set_page_config(
-    page_title="TaxMind Light — Reforma Tributária",
+    page_title="Tribus-AI",
     page_icon="⚖️",
     layout="wide",
 )
 
+# ─── IMPORTS DO MÓDULO ADMIN ──────────────────────────────────────────────────
+from pages.login import render_login, sessao_valida
+from components.trial_banner import render_trial_banner, render_header_com_logout
+
+
+# ─── GUARD DE SESSÃO ─────────────────────────────────────────────────────────
+def _verificar_autenticacao():
+    """Guard de sessão: redireciona para login se não autenticado."""
+    if not sessao_valida():
+        render_login()
+        st.stop()
+
+_verificar_autenticacao()
+
+# ─── HEADER ───────────────────────────────────────────────────────────────────
+render_header_com_logout()
+render_trial_banner()
+
+# ────────────────────────────────────────────────────────────────────────────────
 
 _TOOLTIP_CSS_INJECTED = False
 
@@ -130,7 +155,7 @@ if _creditos and _creditos.get("alerta"):
         st.warning(f"⚠️ {_creditos['mensagem']}")
 
 # --- Sidebar ---
-st.sidebar.title("⚖️ TaxMind Light")
+st.sidebar.title("⚖️ Tribus-AI")
 st.sidebar.caption("Reforma Tributária · Base dinâmica de normas")
 
 if _creditos:
@@ -210,14 +235,24 @@ else:
     st.sidebar.warning("API indisponível — recarregue a página")
 
 # --- Abas ---
-aba1, aba2, aba3, aba4 = st.tabs(["Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos"])
+is_admin = st.session_state.get("user_is_admin", False)
+
+if is_admin:
+    aba1, aba2, aba3, aba4, tab_admin = st.tabs([
+        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos", "⚙️ Admin"
+    ])
+else:
+    aba1, aba2, aba3, aba4 = st.tabs([
+        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos"
+    ])
+    tab_admin = None
 
 
 # ===========================================================================
 # ABA 1 — Consultar
 # ===========================================================================
 with aba1:
-    st.title("TaxMind Light — Reforma Tributária")
+    st.title("Tribus-AI — Reforma Tributária")
     st.caption("Análise tributária com base legislativa verificada · Esta análise não substitui a avaliação do seu time fiscal")
 
     _lbl("Sua consulta", "Digite sua dúvida tributária relacionada à Reforma Tributária (IBS, CBS, ICMS, alíquotas, etc.). O sistema buscará na legislação e gerará uma análise fundamentada.")
@@ -238,6 +273,7 @@ with aba1:
                         "norma_filter": norma_filter,
                         "top_k": top_k,
                         "excluir_tipos": [] if incluir_outros else ["Outro"],
+                        "user_id": st.session_state.get("user_id"),
                     },
                     timeout=60,
                 )
@@ -256,7 +292,7 @@ with aba1:
             if _tem_bl02:
                 st.warning(
                     "⚠️ **Sua consulta não contém termos tributários reconhecidos.**\n\n"
-                    "O TaxMind analisa questões relacionadas à Reforma Tributária "
+                    "O Tribus-AI analisa questões relacionadas à Reforma Tributária "
                     "(IBS, CBS, ICMS, alíquotas, split payment, etc.). "
                     "Tente reformular incluindo o contexto tributário.\n\n"
                     f"**Sugestão:**\n\n"
@@ -820,7 +856,7 @@ with aba3:
                     st.info(_qual_map.get(_dados_ro.get("dados_qualidade", ""), _dados_ro.get("dados_qualidade") or "—"))
 
                 elif _passo_vis == 3:
-                    st.subheader("Passo 3 — Análise tributária (TaxMind)")
+                    st.subheader("Passo 3 — Análise tributária (Tribus-AI)")
                     st.caption("Pergunta submetida")
                     st.info(_dados_ro.get("query_analise") or "—")
                     _analise = _dados_ro.get("analise_result") or {}
@@ -929,7 +965,7 @@ with aba3:
             if _caso_concluido:
                 pass  # Formulário não renderizado para caso concluído
             elif passo_atual == 3:
-                _lbl("Pergunta para o TaxMind", "Formule a pergunta tributária que deseja que o TaxMind analise com base na legislação. Quanto mais específica a pergunta, mais precisa será a análise.")
+                _lbl("Pergunta para o Tribus-AI", "Formule a pergunta tributária que deseja que o Tribus-AI analise com base na legislação. Quanto mais específica a pergunta, mais precisa será a análise.")
                 query_analise = st.text_area(
                     "Pergunta",
                     height=80,
@@ -947,6 +983,7 @@ with aba3:
                                         "query": query_analise,
                                         "excluir_tipos": [] if incluir_outros else ["Outro"],
                                         "case_id": case_id_input,
+                                        "user_id": st.session_state.get("user_id"),
                                     },
                                     timeout=60.0,
                                 )
@@ -1025,7 +1062,7 @@ with aba3:
 
                     elif passo_atual == 4:
                         # Passo 4: Posição do gestor — hipótese (old P5)
-                        st.info("Esta é a sua posição — registre ANTES de ver a recomendação do TaxMind (Passo 5).")
+                        st.info("Esta é a sua posição — registre ANTES de ver a recomendação do Tribus-AI (Passo 5).")
                         _lbl("Nossa posição antes da análise", "Registre aqui a posição do gestor tributário ANTES de ver a recomendação da IA. Isso garante independência decisória e permite comparação posterior.")
                         dados_passo["hipotese_gestor"] = st.text_area(
                             "Hipótese",
@@ -1060,10 +1097,10 @@ with aba3:
                             _rec_salva = "\n\n".join(_partes)
 
                         if _rec_salva:
-                            st.info("Recomendação gerada automaticamente pelo TaxMind com base na análise do Passo 3. Edite se necessário antes de avançar.")
+                            st.info("Recomendação gerada automaticamente pelo Tribus-AI com base na análise do Passo 3. Edite se necessário antes de avançar.")
                         else:
                             st.warning("Não foi possível recuperar a análise do Passo 3. Preencha a recomendação manualmente ou volte ao Passo 3 e refaça a análise.")
-                        _lbl("Recomendação TaxMind", "Recomendação gerada automaticamente pela IA com base na análise do Passo 3. Revise e edite se necessário antes de registrar sua decisão.")
+                        _lbl("Recomendação Tribus-AI", "Recomendação gerada automaticamente pela IA com base na análise do Passo 3. Revise e edite se necessário antes de registrar sua decisão.")
                         dados_passo["recomendacao"] = st.text_area(
                             "Recomendação",
                             height=200,
@@ -1346,7 +1383,7 @@ with aba4:
             elif classe_sel in ("nota_trabalho", "recomendacao_formal"):
                 _tipo_label = CLASSE_LABEL.get(classe_sel, classe_sel)
                 if not query_out.strip():
-                    st.error(f"O campo **Consulta** é obrigatório para {_tipo_label}. Informe a pergunta que o TaxMind deve analisar.")
+                    st.error(f"O campo **Consulta** é obrigatório para {_tipo_label}. Informe a pergunta que o Tribus-AI deve analisar.")
                     st.stop()
             elif classe_sel == "material_compartilhavel":
                 if base_id_out <= 0:
@@ -1356,7 +1393,7 @@ with aba4:
                     st.error("Selecione ao menos um **público-alvo** para o Material Compartilhável.")
                     st.stop()
 
-            body: dict = {"case_id": case_id_out, "classe": classe_sel}
+            body: dict = {"case_id": case_id_out, "classe": classe_sel, "user_id": st.session_state.get("user_id")}
             if stk_sel:
                 body["stakeholders"] = stk_sel
             if classe_sel == "alerta":
@@ -1533,7 +1570,7 @@ with aba4:
 if False:  # noqa: Aba oculta durante fase de testes com usuários
     aba5 = None  # placeholder
     st.title("Qualidade do Sistema")
-    st.caption("Monitoramento contínuo, detecção de variações e validação automática do TaxMind Light.")
+    st.caption("Monitoramento contínuo, detecção de variações e validação automática do Tribus-AI.")
 
     # ------ Linha 1 — KPIs ------
     st.subheader("Indicadores — Últimos 7 dias")
@@ -1749,3 +1786,14 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
                 st.error(rb.json().get("detail", rb.text[:200]))
         except httpx.ConnectError:
             st.error("API offline.")
+
+# ===========================================================================
+# ABA ADMIN — Painel de Gerenciamento de Usuários (apenas ADMIN)
+# ===========================================================================
+if is_admin and tab_admin is not None:
+    with tab_admin:
+        try:
+            from admin import render_painel_admin
+            render_painel_admin()
+        except ImportError:
+            st.info("Painel administrativo será habilitado no próximo passo.")
