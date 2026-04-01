@@ -1,6 +1,6 @@
 services:
   db:
-    container_name: taxmind-db
+    container_name: tribus-ai-db
     image: pgvector/pgvector:pg16
     env_file: .env
     ports:
@@ -19,10 +19,10 @@ services:
       interval: 5s
       retries: 5
     networks:
-      - taxmind-net
+      - tribus-ai-net
 
   api:
-    container_name: taxmind-api
+    container_name: tribus-ai-api
     build: .
     command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -36,10 +36,10 @@ services:
       db:
         condition: service_healthy
     networks:
-      - taxmind-net
+      - tribus-ai-net
 
   ui:
-    container_name: taxmind-ui
+    container_name: tribus-ai-ui
     build: .
     command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true
     ports:
@@ -54,12 +54,12 @@ services:
     depends_on:
       - api
     networks:
-      - taxmind-net
+      - tribus-ai-net
 
 volumes:
   taxmind_pgdata:
     external: true
 
 networks:
-  taxmind-net:
-    name: taxmind-net
+  tribus-ai-net:
+    name: tribus-ai-net
