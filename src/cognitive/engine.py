@@ -697,6 +697,10 @@ def _registrar_interacao(
     user_id: Optional[str] = None,
 ) -> None:
     """Registra em ai_interactions."""
+    # Opção A: UUID de bypass (BYPASS_AUTH) não existe em users — gravar NULL
+    _BYPASS_USER_ID = "00000000-0000-0000-0000-000000000000"
+    if user_id == _BYPASS_USER_ID:
+        user_id = None
     try:
         cur = conn.cursor()
         cur.execute(
