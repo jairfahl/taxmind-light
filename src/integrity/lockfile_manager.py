@@ -47,7 +47,7 @@ def gerar_lockfile(
 
     Args:
         prompts: {prompt_name: conteudo_texto}
-        taxmind_version: versão do TaxMind (ex: "1.5.0")
+        taxmind_version: versão do Tribus-AI (ex: "1.5.0")
         gate_origem: identificador do gate (ex: "U2")
         criado_por: identificador do executor
 

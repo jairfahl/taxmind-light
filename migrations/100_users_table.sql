@@ -1,5 +1,5 @@
 -- Migration: 100_users_table.sql
--- TaxMind Light — User Management Module
+-- Tribus-AI — User Management Module
 -- Criado em: Abril 2026
 
 BEGIN;
@@ -25,13 +25,13 @@ CREATE INDEX IF NOT EXISTS idx_users_perfil ON users (perfil);
 CREATE INDEX IF NOT EXISTS idx_users_ativo  ON users (ativo);
 
 -- ─── INSERIR ADMIN PADRÃO ──────────────────────────────────────────────────────
--- Senha padrão: TaxMind@2026!
+-- Senha padrão: Tribus@2026!
 -- Hash bcrypt gerado para esse valor exato.
 -- TROCAR EM PRODUÇÃO via painel admin.
 
 INSERT INTO users (email, nome, senha_hash, perfil)
 VALUES (
-    'admin@taxmind.com.br',
+    'admin@tribus-ai.com.br',
     'Administrador',
     '$2b$12$inGAr2VadNykko8N0a0L4uhw68ziktoSE9L4oy6LiexsKJG4iie/u',
     'ADMIN'
