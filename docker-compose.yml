@@ -41,7 +41,7 @@ services:
   ui:
     container_name: tribus-ai-ui
     build: .
-    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --server.runOnSave true --server.maxUploadSize 500
     ports:
       - "8521:8501"
     env_file: .env
