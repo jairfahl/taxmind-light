@@ -124,7 +124,7 @@
       display: flex;
       align-items: center;
     }
-    .logo img { height: 36px; width: auto; display: block; }
+    .logo img { height: 72px; width: auto; display: block; }
     .nav-links {
       display: flex;
       align-items: center;
@@ -209,19 +209,12 @@
     }
     .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; }
     .hero-visual {
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.15);
       border-radius: 16px;
-      aspect-ratio: 16/10;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: rgba(255,255,255,.5);
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4);
+      border: 1px solid rgba(255,255,255,.1);
     }
-    .hero-visual svg { opacity: .4; }
-    .hero-visual span { font-size: .85rem; }
+    .hero-visual img { width: 100%; height: auto; display: block; }
     .hero-stats {
       display: flex;
       gap: 32px;
@@ -571,7 +564,7 @@
   <div class="container">
     <div class="nav-inner">
       <a href="#" class="logo">
-        <img src="assets/logo.png" alt="Tribus-AI" style="height:36px;width:auto;">
+        <img src="assets/logo.png" alt="Tribus-AI" style="height:72px;width:auto;">
       </a>
       <ul class="nav-links">
         <li><a href="#problema">O Problema</a></li>
@@ -628,15 +621,8 @@
           </div>
         </div>
       </div>
-      <div class="hero-visual" role="img" aria-label="Preview do painel Tribus-AI">
-        <svg width="64" height="64" fill="none" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-          <rect width="64" height="64" rx="16" fill="rgba(255,255,255,0.1)"/>
-          <rect x="12" y="16" width="40" height="5" rx="2.5" fill="rgba(255,255,255,0.4)"/>
-          <rect x="12" y="26" width="28" height="4" rx="2" fill="rgba(255,255,255,0.25)"/>
-          <rect x="12" y="35" width="34" height="4" rx="2" fill="rgba(255,255,255,0.25)"/>
-          <rect x="12" y="44" width="20" height="4" rx="2" fill="rgba(255,255,255,0.25)"/>
-        </svg>
-        <span>Screenshot do app em breve</span>
+      <div class="hero-visual">
+        <img src="assets/app-screenshot.png" alt="Painel Tribus-AI — Consulta tributária com base legislativa verificada">
       </div>
     </div>
   </div>
