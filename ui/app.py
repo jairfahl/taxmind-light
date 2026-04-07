@@ -224,13 +224,7 @@ normas_disponiveis = _buscar_normas_disponiveis()
 if len(normas_disponiveis) <= len(_FALLBACK_NORMAS):
     _buscar_normas_disponiveis.clear()
 
-normas_sel = st.sidebar.multiselect(
-    "Filtrar por norma",
-    options=list(normas_disponiveis.keys()),
-    default=list(normas_disponiveis.keys()),
-    help="Selecione quais normas legislativas devem ser consultadas na busca. Por padrão, todas as normas disponíveis são incluídas.",
-)
-norma_filter = [normas_disponiveis[n] for n in normas_sel] if normas_sel else None
+norma_filter = None
 
 top_k = st.sidebar.slider(
     "Trechos consultados", min_value=3, max_value=10, value=5,
