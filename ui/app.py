@@ -200,7 +200,8 @@ if _creditos:
     saldo = _creditos.get("saldo_restante", 0)
     limite = _creditos.get("limite", 0)
     pct = (saldo / limite * 100) if limite > 0 else 0
-    st.sidebar.metric("Saldo API", f"US$ {saldo:.2f}", delta=f"{pct:.0f}% restante")
+    gasto = _creditos.get("total_gasto", 0)
+    st.sidebar.metric("Consumo estimado (API)", f"US$ {gasto:.2f}", delta=f"{pct:.0f}% do limite usado")
     st.sidebar.divider()
 
 # --- Notificação de novos documentos detectados ---
