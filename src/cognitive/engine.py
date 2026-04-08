@@ -45,6 +45,7 @@ from src.rag.spd import (
 from src.cognitive.metodos import formatar_metodos_para_prompt
 from src.cognitive.qualificacao_fatica import calcular_semaforo, formatar_fatos_para_contexto
 from src.rag.vigencia_checker import AlertaVigencia, alertas_para_dict, verificar_vigencia_resposta
+from src.outputs.stakeholders_inline import gerar_resumos_stakeholders, resumos_para_dict
 
 load_dotenv()
 
@@ -249,6 +250,7 @@ class AnaliseResult:
     forca_corrente_contraria: Optional[str] = None
     risco_adocao: Optional[str] = None
     alertas_vigencia: list[AlertaVigencia] = field(default_factory=list)
+    saidas_stakeholders: list[dict] = field(default_factory=list)
 
 
 _anthropic_client: Optional[anthropic.Anthropic] = None
@@ -1276,6 +1278,17 @@ def _analisar_inner(
                         alertas_vigencia=_alertas_vigencia_todos)
     logger.info("Análise concluída: status=%s score=%s latência=%dms flags=%s",
                 qualidade.status, dados.get("scoring_confianca"), latencia_ms, all_flags)
+
+    # Saídas por Stakeholder (C3, G16) — falhas individuais não bloqueiam retorno
+    try:
+        _saidas = gerar_resumos_stakeholders(
+            analise_original=resultado.resposta,
+            client=_get_client(),
+            model=model,
+        )
+        resultado.saidas_stakeholders = resumos_para_dict(_saidas)
+    except Exception as _st_err:
+        logger.debug("Stakeholder summaries ignorados: %s", _st_err)
 
     # Observability — não propaga exceções
     try:

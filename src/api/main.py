@@ -183,6 +183,7 @@ def _analise_to_dict(resultado: AnaliseResult) -> dict:
         "model_id": resultado.model_id,
         "latencia_ms": resultado.latencia_ms,
         "retrieval_strategy": resultado.retrieval_strategy,
+        "saidas_stakeholders": resultado.saidas_stakeholders,
     }
 
 

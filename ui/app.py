@@ -16,6 +16,7 @@ from src.cognitive.metodos import METODOS_ANALISE, MAX_METODOS, sugerir_metodos
 from src.cognitive.detector_carimbo import detectar_carimbo as _detectar_carimbo
 from ui.components.grau_consolidacao import exibir_painel_governanca
 from ui.components.qualificacao_fatica import coletar_qualificacao_fatica
+from ui.components.saidas_stakeholder import exibir_saidas_stakeholder
 from ui.pages.simulador_carga import render_simulador_carga
 from ui.pages.simulador_split_payment import render_simulador_split_payment
 from ui.pages.monitor_creditos import render_monitor_creditos
@@ -478,6 +479,9 @@ with aba1:
                         st.error(_av["mensagem"])
                     else:
                         st.warning(_av["mensagem"])
+
+        if data.get("saidas_stakeholders"):
+            exibir_saidas_stakeholder(data["saidas_stakeholders"])
 
         anti = data["anti_alucinacao"]
         flags = anti.get("flags", [])
@@ -992,6 +996,9 @@ with aba3:
                         if _analise.get("disclaimer"):
                             st.caption("Ressalva")
                             st.warning(_sanitize_latex(_analise["disclaimer"]))
+                        if _analise.get("saidas_stakeholders"):
+                            exibir_saidas_stakeholder(_analise["saidas_stakeholders"])
+
                         # Chunks utilizados
                         _chunks = _analise.get("chunks", [])
                         if _chunks:
