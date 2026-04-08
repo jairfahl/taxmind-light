@@ -19,6 +19,8 @@ from ui.components.qualificacao_fatica import coletar_qualificacao_fatica
 from ui.pages.simulador_carga import render_simulador_carga
 from ui.pages.simulador_split_payment import render_simulador_split_payment
 from ui.pages.monitor_creditos import render_monitor_creditos
+from ui.pages.ciclo_pos_decisao import render_ciclo_pos_decisao
+from src.cognitive.monitoramento_p6 import ativar_monitoramento_p6
 
 load_dotenv()
 
@@ -1553,6 +1555,19 @@ with aba3:
                                 "- Volte à aba **Consultar** para fazer novas análises\n"
                                 "- Ou crie um **novo caso** no Protocolo de Decisão"
                             )
+                            # Ativar monitoramento P6 automaticamente
+                            try:
+                                _user_id_p6 = st.session_state.get("user_id")
+                                ativar_monitoramento_p6(
+                                    case_id=case_id_input,
+                                    user_id=_user_id_p6,
+                                )
+                                st.info(
+                                    "**P6 ativado:** esta decisão está sendo monitorada. "
+                                    "Você será alertado se mudanças legislativas afetarem suas premissas."
+                                )
+                            except Exception as _p6_err:
+                                pass  # P6 é best-effort — não bloqueia conclusão do caso
                         else:
                             st.success(f"✅ Avançado para {PASSO_NOME.get(novo_passo, str(novo_passo))}")
 
@@ -1584,6 +1599,16 @@ with aba3:
                         # Forçar recarga do caso
                         st.session_state["_proto_case_id"] = case_id_input
                         st.rerun()
+
+    # ------------------------------------------------------------------
+    # P6 — Ciclo Pós-Decisão (sub-tab ao final do Protocolo)
+    # ------------------------------------------------------------------
+    st.divider()
+    _tab_protocolo_fin, _tab_p6 = st.tabs(["P1–P5 (acima)", "P6 — Ciclo Pós-Decisão"])
+    with _tab_p6:
+        render_ciclo_pos_decisao()
+    with _tab_protocolo_fin:
+        st.caption("O conteúdo do Protocolo P1–P5 está acima nesta mesma aba.")
 
 
 # ===========================================================================
