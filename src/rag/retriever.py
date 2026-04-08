@@ -92,6 +92,7 @@ class ChunkResultado:
     score_vetorial: float
     score_bm25: float
     score_final: float
+    remissao_norm_id: Optional[int] = None
 
 
 def retrieve(
@@ -146,7 +147,8 @@ def retrieve(
                 n.codigo    AS norma_codigo,
                 c.artigo,
                 c.texto,
-                1 - (e.vetor <=> %s::vector) AS score_cosine
+                1 - (e.vetor <=> %s::vector) AS score_cosine,
+                c.remissao_norm_id
             FROM embeddings e
             JOIN chunks  c ON c.id = e.chunk_id
             JOIN normas  n ON n.id = c.norma_id
@@ -204,7 +206,7 @@ def retrieve(
     # 4. Score híbrido e ordenação
     resultados: list[ChunkResultado] = []
     for i, row in enumerate(rows):
-        chunk_id, norma_codigo, artigo, texto, score_cosine = row
+        chunk_id, norma_codigo, artigo, texto, score_cosine, remissao_norm_id = row
         score_cosine = float(score_cosine)
         score_bm25 = float(bm25_scores[i])
         score_final = cosine_weight * score_cosine + bm25_weight * score_bm25
@@ -217,6 +219,7 @@ def retrieve(
             score_vetorial=score_cosine,
             score_bm25=score_bm25,
             score_final=score_final,
+            remissao_norm_id=remissao_norm_id,
         ))
 
     resultados.sort(key=lambda r: r.score_final, reverse=True)
@@ -234,6 +237,40 @@ def retrieve(
         dedup.append(r)
 
     top = dedup[:top_k]
+
+    # RAR — Resolução Automática de Remissões (G12)
+    # Chunks com remissao_norm_id têm a norma referenciada injetada no contexto.
+    try:
+        from src.rag.remissao_resolver import resolver_remissoes
+        _chunks_dict = [
+            {
+                "chunk_id": r.chunk_id,
+                "remissao_norm_id": r.remissao_norm_id,
+                "texto": r.texto,
+                "score_final": r.score_final,
+            }
+            for r in top
+        ]
+        _resultado_rar = resolver_remissoes(_chunks_dict)
+        if _resultado_rar.chunks_remissoes:
+            for _cr in _resultado_rar.chunks_remissoes:
+                _score_rar = _cr.score_original * 0.5  # score derivado — menor que originais
+                top.append(ChunkResultado(
+                    chunk_id=_cr.chunk_id,
+                    norma_codigo=_cr.norma_codigo,
+                    artigo=_cr.artigo or None,
+                    texto=_cr.texto,
+                    score_vetorial=_score_rar,
+                    score_bm25=0.0,
+                    score_final=_score_rar,
+                ))
+            logger.info(
+                "RAR: %d remissão(ões) resolvida(s), %d chunk(s) adicionados ao contexto",
+                _resultado_rar.remissoes_resolvidas,
+                len(_resultado_rar.chunks_remissoes),
+            )
+    except Exception as _rar_err:
+        logger.debug("RAR ignorado: %s", _rar_err)
 
     logger.info("Retrieve concluído: %d resultados (de %d candidatos)", len(top), len(rows))
     for r in top:
