@@ -29,7 +29,7 @@ services:
       - "8020:8000"
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://taxmind:taxmind123@db:5432/taxmind_db
+      - API_BASE_URL=http://api:8000
     volumes:
       - ./src:/app/src
     depends_on:
@@ -47,7 +47,6 @@ services:
     env_file: .env
     environment:
       - API_BASE_URL=http://api:8000
-      - DATABASE_URL=postgresql://taxmind:taxmind123@db:5432/taxmind_db
     volumes:
       - ./ui:/app/ui
       - ./src:/app/src

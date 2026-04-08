@@ -40,9 +40,13 @@ import psycopg2
 from dotenv import load_dotenv
 
 from src.db.pool import get_conn, put_conn
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from src.api.auth_api import verificar_token_api
 
 from src.cognitive.engine import MODEL_DEV, AnaliseResult, analisar
 from src.ingest.chunker import chunkar_documento
@@ -68,6 +72,26 @@ class JobStatus(str, Enum):
 
 _ingest_jobs: dict[str, dict] = {}
 
+# --- SEC-07: MIME validation via magic bytes ---
+_MAGIC_BYTES: dict[str, list[bytes]] = {
+    ".pdf":  [b"%PDF"],
+    ".docx": [b"PK\x03\x04"],
+    ".xlsx": [b"PK\x03\x04"],
+    ".html": [b"<!DOCTYPE", b"<html", b"<HTML", b"<!doctype"],
+    ".txt":  [],  # sem magic bytes — qualquer texto é aceito
+    ".md":   [],
+    ".csv":  [],
+}
+
+def _validar_mime_bytes(header: bytes, ext: str) -> bool:
+    """Valida os magic bytes do arquivo contra a extensão declarada. SEC-07."""
+    permitidos = _MAGIC_BYTES.get(ext)
+    if permitidos is None:
+        return False  # extensão não mapeada
+    if not permitidos:
+        return True   # formatos texto (txt, md, csv) não têm magic bytes
+    return any(header.startswith(magic) for magic in permitidos)
+
 app = FastAPI(
     title="Tribus-AI API",
     description="Motor cognitivo para análise da Reforma Tributária brasileira",
@@ -76,10 +100,15 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://tribus-ai.com.br", "http://localhost:8521"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Rate limiting (slowapi) ---
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.on_event("shutdown")
@@ -99,6 +128,8 @@ class AnalyzeRequest(BaseModel):
     decompose: bool = Field(False, description="Ativar decomposição de sub-perguntas para queries complexas")
     case_id: Optional[int] = Field(None, description="ID do caso (steps 1→6) para injetar contexto dos passos anteriores")
     user_id: Optional[str] = Field(None, description="UUID do usuário autenticado (tenant isolation)")
+    metodos_selecionados: list[str] = Field([], description="IDs dos métodos de análise selecionados no P1 (máx. 4)")
+    criticidade: str = Field("media", description="Nível de criticidade do caso: baixa | media | alta | extrema")
 
 
 # --- Serialização de AnaliseResult para dict ---
@@ -284,8 +315,9 @@ def _buscar_casos_similares(query: str, case_id_atual: Optional[int] = None, top
         return []
 
 
-@app.post("/v1/analyze")
-def analyze(req: AnalyzeRequest):
+@app.post("/v1/analyze", dependencies=[Depends(verificar_token_api)])
+@limiter.limit("20/minute")
+def analyze(request: Request, req: AnalyzeRequest):
     """
     Análise tributária completa (Steps 1→3).
     Retorna 400 se a qualidade for VERMELHO (bloqueado).
@@ -311,10 +343,12 @@ def analyze(req: AnalyzeRequest):
             contexto_caso=contexto_caso,
             casos_similares=casos_similares,
             user_id=req.user_id,
+            metodos_selecionados=req.metodos_selecionados,
+            criticidade=req.criticidade,
         )
     except Exception as e:
         logger.error("Erro interno em /v1/analyze: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
     if resultado.qualidade.status == QualidadeStatus.VERMELHO:
         raise HTTPException(
@@ -329,7 +363,7 @@ def analyze(req: AnalyzeRequest):
     return _analise_to_dict(resultado)
 
 
-@app.get("/v1/chunks")
+@app.get("/v1/chunks", dependencies=[Depends(verificar_token_api)])
 def get_chunks(
     q: str = Query(..., description="Texto da busca"),
     top_k: int = Query(5, ge=1, le=10),
@@ -342,7 +376,7 @@ def get_chunks(
         chunks = retrieve(q, top_k=top_k, norma_filter=norma_filter, excluir_tipos=["Outro"])
     except Exception as e:
         logger.error("Erro em /v1/chunks: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
     return [
         {
@@ -386,7 +420,7 @@ def health():
     }
 
 
-@app.get("/v1/credits")
+@app.get("/v1/credits", dependencies=[Depends(verificar_token_api)])
 def get_credits():
     """Status de creditos de API com alerta quando saldo <= US$0.50."""
     try:
@@ -395,7 +429,7 @@ def get_credits():
         detalhamento = obter_detalhamento()
     except Exception as e:
         logger.error("Erro em /v1/credits: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {
         "total_gasto": status.total_gasto,
         "limite": status.limite,
@@ -499,7 +533,7 @@ def _processar_ingest_background(job_id: str, conteudo: bytes, filename: str,
         _ingest_jobs[job_id]["message"] = str(e)
 
 
-@app.post("/v1/ingest/check-duplicate")
+@app.post("/v1/ingest/check-duplicate", dependencies=[Depends(verificar_token_api)])
 def check_duplicate(file: UploadFile = File(...)):
     """Verifica se arquivo já foi ingestado por nome ou hash MD5."""
     conteudo = file.file.read()
@@ -538,8 +572,10 @@ def check_duplicate(file: UploadFile = File(...)):
     return {"duplicado": False, "mensagem": ""}
 
 
-@app.post("/v1/ingest/upload")
+@app.post("/v1/ingest/upload", dependencies=[Depends(verificar_token_api)])
+@limiter.limit("10/minute")
 def ingest_upload(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Arquivo a ingerir (PDF, DOCX, XLSX, HTML, TXT, MD, CSV)"),
     nome: str = Form(..., description="Nome do documento (ex: IN RFB 2184/2024)"),
@@ -560,8 +596,18 @@ def ingest_upload(
 
     logger.info("POST /v1/ingest/upload nome=%s tipo=%s", nome, tipo)
 
+    # SEC-07: validar magic bytes contra extensão declarada
+    header_bytes = file.file.read(512)
+    if not _validar_mime_bytes(header_bytes, ext):
+        raise HTTPException(status_code=400, detail="Tipo de arquivo inválido.")
+    file.file.seek(0)
+
     codigo = re.sub(r"[^A-Za-z0-9]", "_", nome)[:30].strip("_")
     conteudo = file.file.read()
+
+    # SEC-07: limite de tamanho server-side (50 MB)
+    if len(conteudo) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Arquivo muito grande. Máximo: 50 MB.")
 
     job_id = str(uuid.uuid4())
     _ingest_jobs[job_id] = {"status": JobStatus.PENDING, "message": "", "result": None}
@@ -573,7 +619,7 @@ def ingest_upload(
     return {"job_id": job_id, "status": JobStatus.PENDING}
 
 
-@app.get("/v1/ingest/jobs/{job_id}")
+@app.get("/v1/ingest/jobs/{job_id}", dependencies=[Depends(verificar_token_api)])
 def get_job_status(job_id: str):
     """Polling de status de um job de ingestão."""
     job = _ingest_jobs.get(job_id)
@@ -587,7 +633,7 @@ def get_job_status(job_id: str):
 
 # --- Gerenciamento de normas ---
 
-@app.get("/v1/ingest/normas")
+@app.get("/v1/ingest/normas", dependencies=[Depends(verificar_token_api)])
 def listar_normas():
     """Lista todas as normas na base de conhecimento."""
     conn = get_conn()
@@ -623,7 +669,7 @@ def listar_normas():
     ]
 
 
-@app.delete("/v1/ingest/normas/{norma_id}")
+@app.delete("/v1/ingest/normas/{norma_id}", dependencies=[Depends(verificar_token_api)])
 def deletar_norma(norma_id: int):
     """
     Remove uma norma e todos os seus chunks/embeddings da base.
@@ -719,7 +765,7 @@ def _case_estado_to_dict(estado: CaseEstado) -> dict:
 
 # --- Protocol endpoints ---
 
-@app.post("/v1/cases", status_code=201)
+@app.post("/v1/cases", status_code=201, dependencies=[Depends(verificar_token_api)])
 def criar_caso(req: CriarCasoRequest):
     """Cria um novo caso protocolar em Step 1/rascunho."""
     logger.info("POST /v1/cases titulo=%s", req.titulo[:60])
@@ -733,11 +779,11 @@ def criar_caso(req: CriarCasoRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Erro em /v1/cases: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {"case_id": case_id, "status": "rascunho", "passo_atual": 1}
 
 
-@app.get("/v1/cases")
+@app.get("/v1/cases", dependencies=[Depends(verificar_token_api)])
 def listar_casos():
     """Lista casos reais (exclui cases gerados por testes automatizados)."""
     logger.info("GET /v1/cases")
@@ -783,13 +829,13 @@ def listar_casos():
         ]
     except Exception as e:
         logger.error("Erro em GET /v1/cases: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     finally:
         if conn:
             put_conn(conn)
 
 
-@app.get("/v1/cases/{case_id}")
+@app.get("/v1/cases/{case_id}", dependencies=[Depends(verificar_token_api)])
 def get_caso(case_id: int):
     """Retorna o estado completo do caso com histórico."""
     logger.info("GET /v1/cases/%d", case_id)
@@ -799,11 +845,11 @@ def get_caso(case_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Erro em GET /v1/cases/%d: %s", case_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return _case_estado_to_dict(estado)
 
 
-@app.post("/v1/cases/{case_id}/steps/{passo}")
+@app.post("/v1/cases/{case_id}/steps/{passo}", dependencies=[Depends(verificar_token_api)])
 def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
     """
     Submete dados de um passo e avança/retrocede o protocolo.
@@ -860,10 +906,10 @@ def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Erro em POST /v1/cases/%d/steps/%d: %s", case_id, passo, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
 
-@app.post("/v1/cases/{case_id}/carimbo/confirmar")
+@app.post("/v1/cases/{case_id}/carimbo/confirmar", dependencies=[Depends(verificar_token_api)])
 def confirmar_carimbo(case_id: int, req: ConfirmarCarimboRequest):
     """Confirma alerta de carimbo com justificativa do gestor (mín. 20 chars)."""
     logger.info("POST /v1/cases/%d/carimbo/confirmar alert_id=%d", case_id, req.alert_id)
@@ -875,7 +921,7 @@ def confirmar_carimbo(case_id: int, req: ConfirmarCarimboRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Erro em confirmar_carimbo: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {"confirmado": True, "alert_id": req.alert_id}
 
 
@@ -937,7 +983,7 @@ _output_engine = OutputEngine()
 # Output endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/v1/outputs", status_code=201)
+@app.post("/v1/outputs", status_code=201, dependencies=[Depends(verificar_token_api)])
 def gerar_output(req: GerarOutputRequest):
     """
     Gera um output acionável (C1–C5).
@@ -1021,12 +1067,12 @@ def gerar_output(req: GerarOutputRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Erro em POST /v1/outputs: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
     return _output_result_to_dict(result)
 
 
-@app.get("/v1/outputs/{output_id}")
+@app.get("/v1/outputs/{output_id}", dependencies=[Depends(verificar_token_api)])
 def get_output(output_id: int):
     """Retorna output completo com views por stakeholder."""
     logger.info("GET /v1/outputs/%d", output_id)
@@ -1041,11 +1087,11 @@ def get_output(output_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Erro em GET /v1/outputs/%d: %s", output_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return _output_result_to_dict(result)
 
 
-@app.post("/v1/outputs/{output_id}/aprovar")
+@app.post("/v1/outputs/{output_id}/aprovar", dependencies=[Depends(verificar_token_api)])
 def aprovar_output(output_id: int, req: AprovarOutputRequest):
     """
     Aprova um output. Status gerado → aprovado.
@@ -1062,11 +1108,11 @@ def aprovar_output(output_id: int, req: AprovarOutputRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Erro em aprovar_output: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return _output_result_to_dict(result)
 
 
-@app.get("/v1/cases/{case_id}/outputs")
+@app.get("/v1/cases/{case_id}/outputs", dependencies=[Depends(verificar_token_api)])
 def listar_outputs_caso(case_id: int):
     """Lista todos os outputs de um caso, ordenados por materialidade DESC."""
     logger.info("GET /v1/cases/%d/outputs", case_id)
@@ -1074,7 +1120,7 @@ def listar_outputs_caso(case_id: int):
         outputs = _output_engine.listar_por_caso(case_id)
     except Exception as e:
         logger.error("Erro em GET /v1/cases/%d/outputs: %s", case_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return [_output_result_to_dict(r) for r in outputs]
 
 
@@ -1101,7 +1147,7 @@ class ResolverDriftRequest(BaseModel):
 # Observability endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/v1/observability/metrics")
+@app.get("/v1/observability/metrics", dependencies=[Depends(verificar_token_api)])
 def get_metrics(
     days: int = Query(7, ge=1, le=90),
     prompt_version: Optional[str] = Query(None),
@@ -1149,13 +1195,13 @@ def get_metrics(
         cur.close()
     except Exception as e:
         logger.error("Erro em /v1/observability/metrics: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     finally:
         put_conn(conn)
     return {"metrics": result, "resumo": resumo, "days": days}
 
 
-@app.get("/v1/observability/drift")
+@app.get("/v1/observability/drift", dependencies=[Depends(verificar_token_api)])
 def get_drift_alerts(
     prompt_version: Optional[str] = Query(None),
     model_id: Optional[str] = Query(None),
@@ -1187,13 +1233,13 @@ def get_drift_alerts(
         cur.close()
     except Exception as e:
         logger.error("Erro em /v1/observability/drift: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     finally:
         put_conn(conn)
     return result
 
 
-@app.post("/v1/observability/drift/{alert_id}/resolver")
+@app.post("/v1/observability/drift/{alert_id}/resolver", dependencies=[Depends(verificar_token_api)])
 def resolver_drift(alert_id: int, req: ResolverDriftRequest):
     """Resolve um drift alert com observação."""
     logger.info("POST /v1/observability/drift/%d/resolver", alert_id)
@@ -1204,11 +1250,11 @@ def resolver_drift(alert_id: int, req: ResolverDriftRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Erro em resolver_drift: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {"resolvido": True, "alert_id": alert_id}
 
 
-@app.post("/v1/observability/baseline", status_code=201)
+@app.post("/v1/observability/baseline", status_code=201, dependencies=[Depends(verificar_token_api)])
 def registrar_baseline(req: BaselineRequest):
     """Registra baseline de métricas para a versão de prompt/modelo especificada."""
     logger.info("POST /v1/observability/baseline pv=%s model=%s", req.prompt_version, req.model_id)
@@ -1219,11 +1265,11 @@ def registrar_baseline(req: BaselineRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Erro em registrar_baseline: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return result
 
 
-@app.post("/v1/observability/regression")
+@app.post("/v1/observability/regression", dependencies=[Depends(verificar_token_api)])
 def executar_regression(req: RegressionRequest):
     """
     Executa regression testing sobre o dataset de avaliação.
@@ -1239,7 +1285,7 @@ def executar_regression(req: RegressionRequest):
         )
     except Exception as e:
         logger.error("Erro em executar_regression: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {
         "aprovado": result.aprovado,
         "precisao_citacao": result.precisao_citacao,
@@ -1255,7 +1301,7 @@ def executar_regression(req: RegressionRequest):
 # Budget pressure
 # ---------------------------------------------------------------------------
 
-@app.get("/v1/observability/budget-pressure")
+@app.get("/v1/observability/budget-pressure", dependencies=[Depends(verificar_token_api)])
 def budget_pressure():
     """Retorna pressão média de budget por query_tipo nos últimos 30 dias."""
     logger.info("GET /v1/observability/budget-pressure")
@@ -1302,7 +1348,7 @@ def budget_pressure():
 # Monitor de fontes oficiais
 # ---------------------------------------------------------------------------
 
-@app.post("/v1/monitor/verificar")
+@app.post("/v1/monitor/verificar", dependencies=[Depends(verificar_token_api)])
 def verificar_fontes():
     """Verifica todas as fontes ativas e detecta novos documentos."""
     logger.info("POST /v1/monitor/verificar")
@@ -1311,7 +1357,7 @@ def verificar_fontes():
         resultados = verificar_todas_fontes()
     except Exception as e:
         logger.error("Erro em /v1/monitor/verificar: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {
         "fontes_verificadas": len(resultados),
         "total_novos": sum(r.novos for r in resultados),
@@ -1332,7 +1378,7 @@ def verificar_fontes():
 # Billing — MAU (Monthly Active Users)
 # ---------------------------------------------------------------------------
 
-@app.get("/v1/billing/mau")
+@app.get("/v1/billing/mau", dependencies=[Depends(verificar_token_api)])
 def get_mau(
     tenant_id: str,
     month: Optional[str] = None,  # formato: "2026-04" — se omitido, usa mês corrente
@@ -1446,7 +1492,7 @@ async def asaas_webhook(request: Request):
     return {"received": True}
 
 
-@app.get("/v1/monitor/pendentes")
+@app.get("/v1/monitor/pendentes", dependencies=[Depends(verificar_token_api)])
 def listar_docs_pendentes():
     """Lista documentos detectados aguardando revisao do usuario."""
     logger.info("GET /v1/monitor/pendentes")
@@ -1455,7 +1501,7 @@ def listar_docs_pendentes():
         docs = listar_pendentes()
     except Exception as e:
         logger.error("Erro em /v1/monitor/pendentes: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {
         "total": len(docs),
         "documentos": [
@@ -1474,7 +1520,7 @@ def listar_docs_pendentes():
     }
 
 
-@app.get("/v1/monitor/contagem")
+@app.get("/v1/monitor/contagem", dependencies=[Depends(verificar_token_api)])
 def contagem_pendentes():
     """Retorna quantidade de documentos novos pendentes."""
     try:
@@ -1488,7 +1534,7 @@ class AtualizarDocMonitorRequest(BaseModel):
     status: str = Field(..., description="'ingerido' ou 'descartado'")
 
 
-@app.patch("/v1/monitor/documentos/{doc_id}")
+@app.patch("/v1/monitor/documentos/{doc_id}", dependencies=[Depends(verificar_token_api)])
 def atualizar_doc_monitor(doc_id: int, req: AtualizarDocMonitorRequest):
     """Atualiza status de um documento monitorado."""
     logger.info("PATCH /v1/monitor/documentos/%d status=%s", doc_id, req.status)
@@ -1502,5 +1548,6 @@ def atualizar_doc_monitor(doc_id: int, req: AtualizarDocMonitorRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro em PATCH /v1/monitor/documentos/%d: %s", doc_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {"atualizado": True, "doc_id": doc_id, "status": req.status}

@@ -12,6 +12,7 @@ import time
 import httpx
 import streamlit as st
 from dotenv import load_dotenv
+from src.cognitive.metodos import METODOS_ANALISE, MAX_METODOS, sugerir_metodos
 
 load_dotenv()
 
@@ -21,6 +22,34 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8020")
+
+# SEC-08: chave interna para autenticar chamadas Streamlit → FastAPI
+_API_INTERNAL_KEY = os.getenv("API_INTERNAL_KEY", "")
+_INTERNAL_HEADERS = {"X-API-Key": _API_INTERNAL_KEY}
+
+
+def _api_get(url: str, **kw):
+    """Wrapper httpx.get que injeta o header X-API-Key."""
+    kw.setdefault("headers", {}).update(_INTERNAL_HEADERS)
+    return httpx.get(url, **kw)
+
+
+def _api_post(url: str, **kw):
+    """Wrapper httpx.post que injeta o header X-API-Key."""
+    kw.setdefault("headers", {}).update(_INTERNAL_HEADERS)
+    return httpx.post(url, **kw)
+
+
+def _api_patch(url: str, **kw):
+    """Wrapper httpx.patch que injeta o header X-API-Key."""
+    kw.setdefault("headers", {}).update(_INTERNAL_HEADERS)
+    return httpx.patch(url, **kw)
+
+
+def _api_delete(url: str, **kw):
+    """Wrapper httpx.delete que injeta o header X-API-Key."""
+    kw.setdefault("headers", {}).update(_INTERNAL_HEADERS)
+    return httpx.delete(url, **kw)
 
 # BUG-04 — nomes legíveis para os códigos internos de norma
 NOMES_NORMAS = {
@@ -56,7 +85,7 @@ st.set_page_config(
 # BYPASS_AUTH = True  → período de testes (sem login)
 # BYPASS_AUTH = False → produção (login obrigatório)
 # Para reativar o login: alterar para False e reiniciar o app.
-BYPASS_AUTH = True
+BYPASS_AUTH = False
 
 # ─── IMPORTS DO MÓDULO ADMIN ──────────────────────────────────────────────────
 from pages.login import render_login, sessao_valida
@@ -163,7 +192,7 @@ def _buscar_normas_disponiveis() -> dict[str, str]:
     import time as _t
     for _tentativa in range(3):
         try:
-            hr = httpx.get(f"{API_BASE}/v1/health", timeout=10)
+            hr = _api_get(f"{API_BASE}/v1/health", timeout=10)
             normas = hr.json().get("normas", [])
             if normas:
                 return {n["nome"]: n["codigo"] for n in normas}
@@ -178,7 +207,7 @@ def _buscar_normas_disponiveis() -> dict[str, str]:
 def _verificar_creditos():
     """Consulta saldo de creditos de API a cada 60s."""
     try:
-        resp = httpx.get(f"{API_BASE}/v1/credits", timeout=3)
+        resp = _api_get(f"{API_BASE}/v1/credits", timeout=3)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -208,7 +237,7 @@ if _creditos:
 @st.cache_data(ttl=120)
 def _contar_docs_novos():
     try:
-        resp = httpx.get(f"{API_BASE}/v1/monitor/contagem", timeout=3)
+        resp = _api_get(f"{API_BASE}/v1/monitor/contagem", timeout=3)
         if resp.status_code == 200:
             return resp.json().get("pendentes", 0)
     except Exception:
@@ -247,7 +276,7 @@ def _health_check():
     import time as _time
     for _attempt in range(3):
         try:
-            hr = httpx.get(f"{API_BASE}/v1/health", timeout=10)
+            hr = _api_get(f"{API_BASE}/v1/health", timeout=10)
             if hr.status_code == 200:
                 return hr.json()
         except (httpx.ConnectError, httpx.TimeoutException):
@@ -299,7 +328,7 @@ with aba1:
     if st.button("Analisar", type="primary", disabled=not query.strip()):
         with st.spinner("Analisando..."):
             try:
-                resp = httpx.post(
+                resp = _api_post(
                     f"{API_BASE}/v1/analyze",
                     json={
                         "query": query,
@@ -461,7 +490,7 @@ with aba2:
     _dup_bloqueado = False
     if uploaded_file is not None:
         try:
-            check_resp = httpx.post(
+            check_resp = _api_post(
                 f"{API_BASE}/v1/ingest/check-duplicate",
                 files={"file": (uploaded_file.name, uploaded_file.getvalue())},
                 timeout=15,
@@ -504,7 +533,7 @@ with aba2:
     if st.button("Incluir na base", type="primary", disabled=not pode_ingerir):
         # 1. Disparar ingest assíncrono (retorna imediatamente com job_id)
         try:
-            resp = httpx.post(
+            resp = _api_post(
                 f"{API_BASE}/v1/ingest/upload",
                 files={"file": (uploaded_file.name, uploaded_file.getvalue())},
                 data={"nome": nome_doc.strip(), "tipo": tipo_doc},
@@ -532,7 +561,7 @@ with aba2:
         for i in range(120):  # máximo 120 × 3s = 6 minutos
             time.sleep(3)
             try:
-                poll = httpx.get(f"{API_BASE}/v1/ingest/jobs/{job_id}", timeout=10)
+                poll = _api_get(f"{API_BASE}/v1/ingest/jobs/{job_id}", timeout=10)
                 data = poll.json()
                 status = data["status"]
             except Exception:
@@ -568,7 +597,7 @@ with aba2:
     st.subheader("Documentos na base de conhecimento")
 
     try:
-        resp_normas = httpx.get(f"{API_BASE}/v1/ingest/normas", timeout=10)
+        resp_normas = _api_get(f"{API_BASE}/v1/ingest/normas", timeout=10)
         if resp_normas.status_code == 200:
             normas_lista = resp_normas.json()
             if not normas_lista:
@@ -597,7 +626,7 @@ with aba2:
                         with col_sim:
                             if st.button("Sim, remover", key=f"confirmar_sim_{norma['id']}", type="primary"):
                                 try:
-                                    del_resp = httpx.delete(
+                                    del_resp = _api_delete(
                                         f"{API_BASE}/v1/ingest/normas/{norma['id']}",
                                         timeout=30,
                                     )
@@ -638,7 +667,7 @@ with aba2:
     if st.button("Verificar agora", type="secondary", key="btn_monitor_check"):
         with st.spinner("Consultando fontes oficiais..."):
             try:
-                resp_mon = httpx.post(f"{API_BASE}/v1/monitor/verificar", timeout=60)
+                resp_mon = _api_post(f"{API_BASE}/v1/monitor/verificar", timeout=60)
                 if resp_mon.status_code == 200:
                     mon_data = resp_mon.json()
                     total_novos = mon_data.get("total_novos", 0)
@@ -663,7 +692,7 @@ with aba2:
 
     # Listar documentos pendentes
     try:
-        resp_pend = httpx.get(f"{API_BASE}/v1/monitor/pendentes", timeout=10)
+        resp_pend = _api_get(f"{API_BASE}/v1/monitor/pendentes", timeout=10)
         if resp_pend.status_code == 200:
             pend_data = resp_pend.json()
             docs_pendentes = pend_data.get("documentos", [])
@@ -685,7 +714,7 @@ with aba2:
                         with col_acoes:
                             if st.button("Descartar", key=f"mon_desc_{doc['id']}", type="secondary"):
                                 try:
-                                    httpx.patch(
+                                    _api_patch(
                                         f"{API_BASE}/v1/monitor/documentos/{doc['id']}",
                                         json={"status": "descartado"},
                                         timeout=5,
@@ -753,7 +782,7 @@ with aba3:
                 st.error("Preencha todos os campos.")
             else:
                 try:
-                    r = httpx.post(
+                    r = _api_post(
                         f"{API_BASE}/v1/cases",
                         json={"titulo": titulo_caso.strip(), "descricao": descricao_caso.strip(),
                               "contexto_fiscal": contexto_fiscal.strip()},
@@ -778,7 +807,7 @@ with aba3:
 
     _proto_cases = []
     try:
-        _proto_resp = httpx.get(f"{API_BASE}/v1/cases", timeout=10)
+        _proto_resp = _api_get(f"{API_BASE}/v1/cases", timeout=10)
         if _proto_resp.status_code == 200:
             _proto_cases = _proto_resp.json()
     except Exception:
@@ -805,7 +834,7 @@ with aba3:
     if _proto_cases or st.session_state.get("_proto_case_id") == case_id_input:
         st.session_state["_proto_case_id"] = case_id_input
         try:
-            r = httpx.get(f"{API_BASE}/v1/cases/{case_id_input}", timeout=30)
+            r = _api_get(f"{API_BASE}/v1/cases/{case_id_input}", timeout=30)
         except httpx.TimeoutException:
             st.error("O servidor demorou a responder. Recarregue e tente novamente.")
             st.stop()
@@ -998,25 +1027,56 @@ with aba3:
             if _caso_concluido:
                 pass  # Formulário não renderizado para caso concluído
             elif passo_atual == 3:
+                # ── P4 PRIMEIRO: hipótese do gestor antes de ver a IA ──────────
+                st.subheader("📝 Passo 4 — Sua posição antes da análise")
+                st.info(
+                    "Registre sua interpretação do caso **antes** de ver a recomendação do Tribus-AI. "
+                    "Isso preserva sua independência decisória e previne viés de ancoragem."
+                )
+                _hipotese_key = f"_hipotese_p4_{case_id_input}"
+                hipotese_p4 = st.text_area(
+                    "Sua leitura do caso e inclinação decisória",
+                    height=130,
+                    key=_hipotese_key,
+                    placeholder="Ex: Com base nas premissas levantadas, entendo que o crédito de IBS é aproveitável "
+                                "neste caso. Minha inclinação é aprovar, mas há dúvida sobre o art. X da LC 214/2025...",
+                    label_visibility="collapsed",
+                )
+
+                _hipotese_ok = bool(hipotese_p4 and hipotese_p4.strip())
+                if not _hipotese_ok:
+                    st.warning("⚠️ Registre sua posição acima para liberar a análise da IA.")
+
+                st.divider()
+
+                # ── P3: análise da IA — só liberada após hipótese preenchida ───
+                st.subheader("🤖 Passo 3 — Análise do Tribus-AI")
                 _lbl("Pergunta para o Tribus-AI", "Formule a pergunta tributária que deseja que o Tribus-AI analise com base na legislação. Quanto mais específica a pergunta, mais precisa será a análise.")
                 query_analise = st.text_area(
                     "Pergunta",
                     height=80,
                     label_visibility="collapsed",
                 )
-                if st.button("Analisar →", type="primary"):
+                if st.button("Registrar posição e analisar →", type="primary", disabled=not _hipotese_ok):
                     if not query_analise or len(query_analise.strip()) < 10:
                         st.error("A consulta deve ter ao menos 10 caracteres.")
                     else:
                         with st.spinner("Analisando..."):
                             try:
-                                resp = httpx.post(
+                                # Ler métodos e criticidade salvos no Passo 1
+                                _p1_entry = _steps_data.get(1) or _steps_data.get("1") or {}
+                                _p1_dados = _p1_entry.get("dados") or {}
+                                _metodos_p1 = _p1_dados.get("metodos_selecionados", [])
+                                _criticidade_p1 = _p1_dados.get("criticidade", "media")
+                                resp = _api_post(
                                     f"{API_BASE}/v1/analyze",
                                     json={
                                         "query": query_analise,
                                         "excluir_tipos": [] if incluir_outros else ["Outro"],
                                         "case_id": case_id_input,
                                         "user_id": st.session_state.get("user_id"),
+                                        "metodos_selecionados": _metodos_p1,
+                                        "criticidade": _criticidade_p1,
                                     },
                                     timeout=60.0,
                                 )
@@ -1033,12 +1093,22 @@ with aba3:
                                 if analise.get("disclaimer"):
                                     st.warning(analise["disclaimer"])
 
-                                step_resp = httpx.post(
+                                # Salvar P3 (avança passo_atual → 4)
+                                step_resp = _api_post(
                                     f"{API_BASE}/v1/cases/{case_id_input}/steps/3",
                                     json={"dados": {"query_analise": query_analise, "analise_result": analise}, "acao": "avancar"},
                                     timeout=30.0,
                                 )
                                 step_resp.raise_for_status()
+
+                                # Salvar P4 com hipótese já capturada (avança passo_atual → 5)
+                                hip_resp = _api_post(
+                                    f"{API_BASE}/v1/cases/{case_id_input}/steps/4",
+                                    json={"dados": {"hipotese_gestor": hipotese_p4.strip()}, "acao": "avancar"},
+                                    timeout=30.0,
+                                )
+                                hip_resp.raise_for_status()
+
                                 st.session_state["_proto_case_id"] = case_id_input
                                 st.rerun()
 
@@ -1071,6 +1141,49 @@ with aba3:
                         dados_passo["premissas"] = [p for p in [premissa1, premissa2, premissa3] if p.strip()]
                         _lbl("Período de referência", "Intervalo de tempo ao qual o caso se refere (mês/ano de início e fim).")
                         dados_passo["periodo_fiscal"] = st.text_input("Período", value=step_dados_salvos.get("periodo_fiscal", ""), label_visibility="collapsed")
+
+                        # ── Criticidade + Métodos de análise ──────────────────
+                        st.divider()
+                        _CRITICIDADE_OPCOES = {
+                            "🟢 Baixa — impacto reduzido, sem risco de autuação": "baixa",
+                            "🟡 Média — impacto moderado ou dúvida interpretativa": "media",
+                            "🔴 Alta — risco de autuação ou contingência relevante": "alta",
+                            "⛔ Extrema — litígio iminente ou impacto material": "extrema",
+                        }
+                        _crit_salva = step_dados_salvos.get("criticidade", "media")
+                        _crit_label_salva = next(
+                            (k for k, v in _CRITICIDADE_OPCOES.items() if v == _crit_salva),
+                            list(_CRITICIDADE_OPCOES.keys())[1],
+                        )
+                        _lbl("Criticidade do caso", "Avalie o nível de risco e impacto financeiro. Casos extremos ativam métodos de análise mais robustos.")
+                        _crit_label_sel = st.selectbox(
+                            "Criticidade",
+                            options=list(_CRITICIDADE_OPCOES.keys()),
+                            index=list(_CRITICIDADE_OPCOES.keys()).index(_crit_label_salva),
+                            label_visibility="collapsed",
+                        )
+                        _crit_val = _CRITICIDADE_OPCOES[_crit_label_sel]
+                        dados_passo["criticidade"] = _crit_val
+
+                        _sugestao = sugerir_metodos(_crit_val)
+                        _metodos_opcoes = {m["nome"]: mid for mid, m in METODOS_ANALISE.items()}
+                        _metodos_salvo_ids = step_dados_salvos.get("metodos_selecionados", _sugestao)
+                        _metodos_salvo_nomes = [METODOS_ANALISE[mid]["nome"] for mid in _metodos_salvo_ids if mid in METODOS_ANALISE]
+                        _lbl(
+                            f"Métodos de análise (máx. {MAX_METODOS})",
+                            "Selecione os métodos que o Tribus-AI deve aplicar na análise. "
+                            "Métodos sugeridos pela criticidade são pré-selecionados automaticamente.",
+                        )
+                        _metodos_sel_nomes = st.multiselect(
+                            "Métodos",
+                            options=list(_metodos_opcoes.keys()),
+                            default=_metodos_salvo_nomes,
+                            max_selections=MAX_METODOS,
+                            label_visibility="collapsed",
+                        )
+                        dados_passo["metodos_selecionados"] = [_metodos_opcoes[n] for n in _metodos_sel_nomes]
+                        for _mid in dados_passo["metodos_selecionados"]:
+                            st.caption(f"**{METODOS_ANALISE[_mid]['nome']}** — {METODOS_ANALISE[_mid]['quando_usar']}")
 
                     elif passo_atual == 2:
                         # Passo 2: Estruturar riscos e dados (old P3)
@@ -1105,13 +1218,31 @@ with aba3:
                         )
 
                     elif passo_atual == 5:
-                        # Passo 5: Decidir (merged old P6 + P7)
+                        # Passo 5: Decidir — comparação lado a lado P4 vs P3
+                        # ── Comparação: hipótese do gestor (P4) × análise IA (P3) ──
+                        _p3_entry = _steps_data.get(3) or _steps_data.get("3") or {}
+                        _p3_dados  = _p3_entry.get("dados") or {}
+                        _analise_p3 = _p3_dados.get("analise_result") or {}
+                        _p3_resposta = _sanitize_latex(_analise_p3.get("resposta") or "—")
+
+                        _p4_entry = _steps_data.get(4) or _steps_data.get("4") or {}
+                        _p4_dados  = _p4_entry.get("dados") or {}
+                        _hipotese_p4_salva = _p4_dados.get("hipotese_gestor") or "—"
+
+                        st.subheader("🔍 Comparação — sua posição × recomendação da IA")
+                        _col_hip, _col_ia = st.columns(2)
+                        with _col_hip:
+                            st.markdown("**📌 Sua posição (P4)**")
+                            st.info(_hipotese_p4_salva)
+                        with _col_ia:
+                            st.markdown("**🤖 Análise do Tribus-AI (P3)**")
+                            st.info(_p3_resposta[:800] + ("..." if len(_p3_resposta) > 800 else ""))
+
+                        st.divider()
+
                         # Auto-preencher recomendacao com análise do Passo 3 se campo vazio
                         _rec_salva = step_dados_salvos.get("recomendacao", "")
                         if not _rec_salva:
-                            _p3_entry = _steps_data.get(3) or _steps_data.get("3") or {}
-                            _p3_dados = _p3_entry.get("dados") or {}
-                            _analise_p3 = _p3_dados.get("analise_result") or {}
                             _partes = []
                             if _analise_p3.get("resposta"):
                                 _partes.append(_analise_p3["resposta"])
@@ -1121,7 +1252,6 @@ with aba3:
                                 _partes.append(f"Impacto financeiro: {_analise_p3['impacto_financeiro']}")
                             if _analise_p3.get("fundamento_legal"):
                                 _partes.append(f"Base legal: {', '.join(_analise_p3['fundamento_legal'])}")
-                            # Fallback: campos do SYSTEM_PROMPT antigo
                             if not _partes:
                                 if _analise_p3.get("contra_tese"):
                                     _partes.append(_analise_p3["contra_tese"])
@@ -1189,7 +1319,7 @@ with aba3:
                             st.stop()
 
                     try:
-                        r2 = httpx.post(
+                        r2 = _api_post(
                             f"{API_BASE}/v1/cases/{case_id_input}/steps/{passo_atual}",
                             json={"dados": dados_passo, "acao": acao},
                             timeout=60,
@@ -1237,7 +1367,7 @@ with aba3:
                                 )
                                 if st.form_submit_button("Confirmar Decisão Independente"):
                                     try:
-                                        rc = httpx.post(
+                                        rc = _api_post(
                                             f"{API_BASE}/v1/cases/{case_id_input}/carimbo/confirmar",
                                             json={"alert_id": carimbo["alert_id"], "justificativa": justificativa},
                                             timeout=10,
@@ -1303,7 +1433,7 @@ with aba4:
     # --- Carregar lista de cases do backend ---
     _cases_list = []
     try:
-        _resp_cases = httpx.get(f"{API_BASE}/v1/cases", timeout=10)
+        _resp_cases = _api_get(f"{API_BASE}/v1/cases", timeout=10)
         if _resp_cases.status_code == 200:
             _cases_list = _resp_cases.json()
     except Exception:
@@ -1437,7 +1567,7 @@ with aba4:
                 body["output_base_id"] = base_id_out if base_id_out > 0 else None
 
             try:
-                rg = httpx.post(f"{API_BASE}/v1/outputs", json=body, timeout=120)
+                rg = _api_post(f"{API_BASE}/v1/outputs", json=body, timeout=120)
             except httpx.ConnectError:
                 st.error("API offline.")
                 rg = None
@@ -1459,7 +1589,7 @@ with aba4:
         if carregar_outputs or st.session_state.get("_out_case_id") == case_id_out:
             st.session_state["_out_case_id"] = case_id_out
             try:
-                ro = httpx.get(f"{API_BASE}/v1/cases/{case_id_out}/outputs", timeout=10)
+                ro = _api_get(f"{API_BASE}/v1/cases/{case_id_out}/outputs", timeout=10)
             except httpx.ConnectError:
                 st.error("API offline.")
                 ro = None
@@ -1547,7 +1677,7 @@ with aba4:
                                             obs = st.text_input("Observação (opcional)", key=f"obs_{out['id']}")
                                             if st.form_submit_button("✅ Aprovar"):
                                                 try:
-                                                    ra = httpx.post(
+                                                    ra = _api_post(
                                                         f"{API_BASE}/v1/outputs/{out['id']}/aprovar",
                                                         json={"aprovado_por": aprovado_por, "observacao": obs or None},
                                                         timeout=10,
@@ -1573,7 +1703,7 @@ with aba4:
                                                 st.warning("Selecione ao menos 1 público-alvo.")
                                             else:
                                                 try:
-                                                    rc5 = httpx.post(
+                                                    rc5 = _api_post(
                                                         f"{API_BASE}/v1/outputs",
                                                         json={
                                                             "case_id": case_id_out,
@@ -1608,7 +1738,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
     # ------ Linha 1 — KPIs ------
     st.subheader("Indicadores — Últimos 7 dias")
     try:
-        rm = httpx.get(f"{API_BASE}/v1/observability/metrics", params={"days": 7}, timeout=5)
+        rm = _api_get(f"{API_BASE}/v1/observability/metrics", params={"days": 7}, timeout=5)
         resumo = rm.json().get("resumo", {}) if rm.status_code == 200 else {}
     except Exception:
         resumo = {}
@@ -1640,7 +1770,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
     with col_g1:
         st.subheader("Tempo de resposta (30 dias)")
         try:
-            rm30 = httpx.get(f"{API_BASE}/v1/observability/metrics", params={"days": 30}, timeout=5)
+            rm30 = _api_get(f"{API_BASE}/v1/observability/metrics", params={"days": 30}, timeout=5)
             metrics_list = rm30.json().get("metrics", []) if rm30.status_code == 200 else []
         except Exception:
             metrics_list = []
@@ -1680,7 +1810,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
         st.button("Atualizar")
 
     try:
-        rd = httpx.get(f"{API_BASE}/v1/observability/drift",
+        rd = _api_get(f"{API_BASE}/v1/observability/drift",
                        params={"prompt_version": pv_drift}, timeout=5)
         drift_alerts = rd.json() if rd.status_code == 200 else []
     except Exception:
@@ -1710,7 +1840,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
                     obs = st.text_input("Observação")
                     if st.form_submit_button("✅ Marcar como resolvido"):
                         try:
-                            rr = httpx.post(
+                            rr = _api_post(
                                 f"{API_BASE}/v1/observability/drift/{alert['id']}/resolver",
                                 json={"observacao": obs or "Resolvido via painel"},
                                 timeout=5,
@@ -1728,7 +1858,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
     # ------ Budget de Contexto ------
     st.subheader("Budget de Contexto — Pressão por Tipo de Query")
     try:
-        rbp = httpx.get(f"{API_BASE}/v1/observability/budget-pressure", timeout=5)
+        rbp = _api_get(f"{API_BASE}/v1/observability/budget-pressure", timeout=5)
         if rbp.status_code == 200:
             bp_data = rbp.json()
             if bp_data:
@@ -1762,7 +1892,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
     if run_reg:
         with st.spinner("Executando validação (5 casos)..."):
             try:
-                rr = httpx.post(
+                rr = _api_post(
                     f"{API_BASE}/v1/observability/regression",
                     json={"prompt_version": pv_reg, "model_id": mid_reg, "baseline_version": bv_reg},
                     timeout=180,
@@ -1805,7 +1935,7 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
 
     if reg_base:
         try:
-            rb = httpx.post(
+            rb = _api_post(
                 f"{API_BASE}/v1/observability/baseline",
                 json={"prompt_version": pv_base, "model_id": mid_base},
                 timeout=10,

@@ -23,8 +23,11 @@ DATABASE_URL = os.getenv(
 )
 
 # Chave secreta para assinar JWT.
-# Em produção: definir JWT_SECRET como variável de ambiente.
-JWT_SECRET  = os.getenv("JWT_SECRET", "tribus-ai-dev-secret-2026-change-in-prod")
+# Obrigatório: definir JWT_SECRET como variável de ambiente.
+_jwt_secret = os.getenv("JWT_SECRET")
+if not _jwt_secret:
+    raise RuntimeError("JWT_SECRET não configurada. Defina a variável de ambiente JWT_SECRET.")
+JWT_SECRET  = _jwt_secret
 JWT_ALGO    = "HS256"
 JWT_EXPIRY_HOURS = 8  # sessão expira em 8 horas
 

@@ -42,6 +42,7 @@ from src.rag.spd import (
     listar_normas_ativas,
     spd_retrieve,
 )
+from src.cognitive.metodos import formatar_metodos_para_prompt
 
 load_dotenv()
 
@@ -513,6 +514,7 @@ def _chamar_llm(
     quality_gate: str = "VERDE",
     contexto_caso: Optional[dict] = None,
     casos_similares: Optional[list[dict]] = None,
+    metodos_selecionados: Optional[list[str]] = None,
     _escalated: bool = False,
 ) -> dict:
     """Chama o LLM e retorna o JSON parseado.
@@ -533,12 +535,15 @@ def _chamar_llm(
 
     caso_str = _formatar_contexto_caso(contexto_caso) if contexto_caso else ""
     similares_str = _formatar_casos_similares(casos_similares) if casos_similares else ""
+    metodos_str = formatar_metodos_para_prompt(metodos_selecionados or [])
+    metodos_bloco = f"\n\n{metodos_str}" if metodos_str else ""
 
     user_msg = (
         f"TRECHOS LEGISLATIVOS RECUPERADOS:\n{contexto}\n\n"
         f"CONSULTA: {query}"
         f"{caso_str}"
-        f"{similares_str}\n\n"
+        f"{similares_str}"
+        f"{metodos_bloco}\n\n"
         "Responda APENAS com o JSON especificado."
     )
 
@@ -583,6 +588,7 @@ def _chamar_llm(
                 quality_gate=quality_gate,
                 contexto_caso=contexto_caso,
                 casos_similares=casos_similares,
+                metodos_selecionados=metodos_selecionados,
                 _escalated=True,
             )
         raise RuntimeError(
@@ -763,6 +769,8 @@ def analisar(
     contexto_caso: Optional[dict] = None,
     casos_similares: Optional[list[dict]] = None,
     user_id: Optional[str] = None,
+    metodos_selecionados: Optional[list[str]] = None,
+    criticidade: str = "media",
 ) -> AnaliseResult:
     """
     Pipeline completo de análise tributária (6 Passos).
@@ -780,7 +788,8 @@ def analisar(
     try:
         return _analisar_inner(conn, query, top_k, rerank_top_n, norma_filter,
                                excluir_tipos, model, decompose, t0, contexto_caso,
-                               casos_similares, user_id)
+                               casos_similares, user_id,
+                               metodos_selecionados=metodos_selecionados)
     finally:
         put_conn(conn)
 
@@ -798,6 +807,7 @@ def _analisar_inner(
     contexto_caso: Optional[dict] = None,
     casos_similares: Optional[list[dict]] = None,
     user_id: Optional[str] = None,
+    metodos_selecionados: Optional[list[str]] = None,
 ) -> AnaliseResult:
     """Corpo interno do pipeline de análise (chamado por analisar com try/finally)."""
     # PTF — Pre-filter Temporal: extrair data de referência da query
@@ -1017,14 +1027,16 @@ def _analisar_inner(
     # Primeira chamada
     dados = _chamar_llm(query, contexto, temperatura=temperatura, usar_cot=False, model=model,
                         query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
-                        casos_similares=casos_similares)
+                        casos_similares=casos_similares,
+                        metodos_selecionados=metodos_selecionados)
 
     # Ativar CoT se necessário e re-chamar
     if _precisa_cot(qualidade, dados):
         logger.info("Ativando Chain-of-Thought para query: %s", query[:60])
         dados = _chamar_llm(query, contexto, temperatura=0.3, usar_cot=True, model=model,
                             query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
-                            casos_similares=casos_similares)
+                            casos_similares=casos_similares,
+                            metodos_selecionados=metodos_selecionados)
 
     # P4 — Anti-alucinação
     anti = AntiAlucinacaoResult()
@@ -1054,6 +1066,7 @@ def _analisar_inner(
             temperatura=0.0, usar_cot=False, model=model,
             query_tipo=qt_str, quality_gate=qg_str, contexto_caso=contexto_caso,
             casos_similares=casos_similares,
+            metodos_selecionados=metodos_selecionados,
         )
         m4_ok2, m4_flags2 = _verificar_m4_consistencia(dados_corrigido)
         if m4_ok2:
