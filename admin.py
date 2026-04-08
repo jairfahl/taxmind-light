@@ -459,6 +459,46 @@ def _render_secao_api():
         st.info("Sem dados de consumo no período selecionado.")
 
 
+# ─── SEÇÃO C — LEGAL HOLD ──────────────────────────────────────────────────────
+
+def _render_secao_legal_hold() -> None:
+    """Painel de Legal Hold — lista documentos preservados e permite desativar hold."""
+    import pandas as pd
+    from src.outputs.legal_hold import listar_documentos_com_hold
+
+    st.subheader("Legal Hold — Documentos Preservados")
+    st.caption(
+        "Documentos com Legal Hold ativo não podem ser deletados. "
+        "Dossiês de Decisão e Materiais Compartilháveis têm Legal Hold permanente "
+        "(CTN art. 150, §4º — prescrição tributária 5 anos)."
+    )
+
+    try:
+        docs = listar_documentos_com_hold(st.session_state.get("user_id", ""))
+    except Exception as e:
+        st.error(f"Erro ao carregar documentos: {e}")
+        return
+
+    st.metric("Total com Legal Hold", len(docs))
+
+    if not docs:
+        st.info("Nenhum documento com Legal Hold ativo.")
+        return
+
+    dados = [
+        {
+            "ID": d["id"],
+            "Origem": d["tabela"],
+            "Classe": d["classe"],
+            "Usuário": d["usuario"] or "—",
+            "Criado em": d["criado_em"].strftime("%d/%m/%Y") if d["criado_em"] else "—",
+            "Hold até": d["legal_hold_ate"].strftime("%d/%m/%Y") if d.get("legal_hold_ate") else "Permanente",
+        }
+        for d in docs
+    ]
+    st.dataframe(pd.DataFrame(dados), use_container_width=True, hide_index=True)
+
+
 # ─── ENTRY POINT ───────────────────────────────────────────────────────────────
 
 def render_painel_admin():
@@ -474,10 +514,13 @@ def render_painel_admin():
 
     st.title("⚙️ Administração")
 
-    sec_a, sec_b = st.tabs(["👥 Usuários", "💰 Consumo de API"])
+    sec_a, sec_b, sec_c = st.tabs(["👥 Usuários", "💰 Consumo de API", "🔒 Legal Hold"])
 
     with sec_a:
         _render_secao_usuarios()
 
     with sec_b:
         _render_secao_api()
+
+    with sec_c:
+        _render_secao_legal_hold()

@@ -1874,6 +1874,12 @@ with aba4:
                                     + (f" · {_hold_badge}" if _hold_badge else "")
                                     + (f" · {_imut_badge}" if _imut_badge else "")
                                 )
+                                if out.get("legal_hold") and out.get("legal_hold_ate"):
+                                    st.caption(
+                                        f"🔒 **Legal Hold ativo** — preservado até "
+                                        f"{str(out['legal_hold_ate'])[:10]} "
+                                        "(CTN art. 150, §4º — prescrição tributária 5 anos)"
+                                    )
 
                                 # Conteúdo principal
                                 conteudo = out.get("conteudo", {})
