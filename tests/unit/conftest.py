@@ -44,8 +44,10 @@ def _make_mock_analise_result():
         qualidade=_make_mock_qualidade(),
         fundamento_legal=["Art. 9 LC 214/2025"],
         grau_consolidacao="consolidado",
-        contra_tese=None,
+        contra_tese="Corrente minoritária questiona a base legal.",
         scoring_confianca="alto",
+        forca_corrente_contraria="Baixa",
+        risco_adocao="Risco de autuação regulatória.",
         resposta="Resposta fixture de análise tributária.",
         disclaimer="Disclaimer fixture",
         anti_alucinacao=_make_mock_anti_alucinacao(),
@@ -59,6 +61,12 @@ def _make_mock_analise_result():
 # ---------------------------------------------------------------------------
 # Autouse mocks globais
 # ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_analise_result():
+    """Retorna um AnaliseResult pré-construído para testes que precisam acessar seus campos."""
+    return _make_mock_analise_result()
+
 
 @pytest.fixture(autouse=True)
 def mock_llm_calls():

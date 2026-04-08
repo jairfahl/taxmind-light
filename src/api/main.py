@@ -150,6 +150,8 @@ def _analise_to_dict(resultado: AnaliseResult) -> dict:
         "fundamento_legal": resultado.fundamento_legal,
         "grau_consolidacao": resultado.grau_consolidacao,
         "contra_tese": resultado.contra_tese,
+        "forca_corrente_contraria": resultado.forca_corrente_contraria,
+        "risco_adocao": resultado.risco_adocao,
         "scoring_confianca": resultado.scoring_confianca,
         "resposta": resultado.resposta,
         "disclaimer": resultado.disclaimer,

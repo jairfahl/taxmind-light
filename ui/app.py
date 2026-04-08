@@ -14,6 +14,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from src.cognitive.metodos import METODOS_ANALISE, MAX_METODOS, sugerir_metodos
 from src.cognitive.detector_carimbo import detectar_carimbo as _detectar_carimbo
+from ui.components.grau_consolidacao import exibir_painel_governanca
 
 load_dotenv()
 
@@ -428,12 +429,24 @@ with aba1:
 
         grau = data["grau_consolidacao"]
         grau_label = {
-            "consolidado": "Entendimento consolidado",
-            "divergente":  "Tema em disputa — risco moderado",
-            "indefinido":  "Sem precedente — risco elevado",
+            "consolidado":   "Entendimento consolidado",
+            "em_disputa":    "Tema em disputa — risco moderado",
+            "divergente":    "Tema em disputa — risco moderado",
+            "sem_precedente":"Sem precedente — risco elevado",
+            "indefinido":    "Sem precedente — risco elevado",
         }.get(grau, grau.capitalize())
-        grau_icon = {"consolidado": "✅", "divergente": "⚠️", "indefinido": "❓"}.get(grau, "")
+        grau_icon = {
+            "consolidado": "✅", "em_disputa": "⚠️", "divergente": "⚠️",
+            "sem_precedente": "❓", "indefinido": "❓",
+        }.get(grau, "")
         st.caption(f"Consenso de Mercado: {grau_icon} {grau_label}")
+
+        exibir_painel_governanca(
+            grau=data.get("grau_consolidacao", ""),
+            forca_contra_tese=data.get("forca_corrente_contraria", ""),
+            risco=data.get("risco_adocao", ""),
+            scoring_confianca=data.get("scoring_confianca", ""),
+        )
 
         if data["fundamento_legal"]:
             st.subheader("📋 Base legal")
@@ -441,8 +454,12 @@ with aba1:
                 st.write(f"- {art}")
 
         if data.get("contra_tese"):
-            with st.expander("⚖️ Posição contrária"):
+            _forca = data.get("forca_corrente_contraria", "")
+            _forca_label = {"Alta": "🔴 Alta", "Média": "🟡 Média", "Baixa": "🟢 Baixa"}.get(_forca, _forca)
+            with st.expander(f"⚖️ Contra-tese {'— Força ' + _forca_label if _forca_label else ''}"):
                 st.write(_sanitize_latex(data["contra_tese"]))
+                if data.get("risco_adocao"):
+                    st.warning(f"**Risco de adotar a posição recomendada:** {_sanitize_latex(data['risco_adocao'])}")
 
         anti = data["anti_alucinacao"]
         flags = anti.get("flags", [])
@@ -947,8 +964,13 @@ with aba3:
                             else:
                                 st.markdown(str(_fl))
                         if _analise.get("contra_tese"):
-                            st.caption("Contra-tese")
+                            _forca_ro = _analise.get("forca_corrente_contraria", "")
+                            _forca_ro_label = {"Alta": "🔴 Alta", "Média": "🟡 Média", "Baixa": "🟢 Baixa"}.get(_forca_ro, _forca_ro)
+                            st.caption(f"Contra-tese {'— Força ' + _forca_ro_label if _forca_ro_label else ''}")
                             st.warning(_sanitize_latex(_analise["contra_tese"]))
+                            if _analise.get("risco_adocao"):
+                                st.caption("Risco de adotar a posição recomendada")
+                                st.error(_sanitize_latex(_analise["risco_adocao"]))
                         if _analise.get("disclaimer"):
                             st.caption("Ressalva")
                             st.warning(_sanitize_latex(_analise["disclaimer"]))
@@ -1097,8 +1119,22 @@ with aba3:
                                 st.markdown(f"**Análise**: {_sanitize_latex(analise['resposta'])}")
                                 if analise.get("fundamento_legal"):
                                     st.markdown(f"**Base legal**: {', '.join(analise['fundamento_legal'])}")
+                                if analise.get("contra_tese"):
+                                    _forca_p3 = analise.get("forca_corrente_contraria", "")
+                                    _forca_p3_label = {"Alta": "🔴 Alta", "Média": "🟡 Média", "Baixa": "🟢 Baixa"}.get(_forca_p3, _forca_p3)
+                                    with st.expander(f"⚖️ Contra-tese {'— Força ' + _forca_p3_label if _forca_p3_label else ''}"):
+                                        st.write(_sanitize_latex(analise["contra_tese"]))
+                                        if analise.get("risco_adocao"):
+                                            st.warning(f"**Risco de adotar:** {_sanitize_latex(analise['risco_adocao'])}")
                                 if analise.get("disclaimer"):
                                     st.warning(analise["disclaimer"])
+
+                                exibir_painel_governanca(
+                                    grau=analise.get("grau_consolidacao", ""),
+                                    forca_contra_tese=analise.get("forca_corrente_contraria", ""),
+                                    risco=analise.get("risco_adocao", ""),
+                                    scoring_confianca=analise.get("scoring_confianca", ""),
+                                )
 
                                 # Salvar P3 (avança passo_atual → 4)
                                 step_resp = _api_post(
@@ -1301,6 +1337,13 @@ with aba3:
                         with _col_ia:
                             st.markdown("**🤖 Análise do Tribus-AI (P3)**")
                             st.info(_p3_resposta[:800] + ("..." if len(_p3_resposta) > 800 else ""))
+
+                        exibir_painel_governanca(
+                            grau=_analise_p3.get("grau_consolidacao", ""),
+                            forca_contra_tese=_analise_p3.get("forca_corrente_contraria", ""),
+                            risco=_analise_p3.get("risco_adocao", ""),
+                            scoring_confianca=_analise_p3.get("scoring_confianca", ""),
+                        )
 
                         st.divider()
 

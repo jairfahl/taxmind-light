@@ -82,11 +82,20 @@ FORMATO DE RESPOSTA (JSON estrito):
   "impacto_financeiro": "string — estimativa de impacto em termos de custo,
                          carga tributária ou fluxo de caixa",
   "fundamento_legal": ["lista de artigos e normas que suportam a resposta"],
-  "posicao_mercado": "consolidado | em_disputa | sem_precedente",
-  "nivel_confianca": float entre 0 e 1,
-  "posicao_contraria": "string ou null — risco alternativo se tema em disputa",
+  "grau_consolidacao": "consolidado | em_disputa | sem_precedente",
+  "scoring_confianca": "alto | medio | baixo",
+  "contra_tese": "string — argumento principal da corrente contrária (OBRIGATÓRIO, mesmo para temas consolidados)",
+  "forca_corrente_contraria": "Alta | Média | Baixa",
+  "risco_adocao": "string — risco concreto de adotar a posição recomendada",
   "acao_recomendada": "string — próximo passo concreto para a empresa"
 }
+
+REGRA G11 — CONTRA-TESE OBRIGATÓRIA:
+Toda resposta DEVE incluir "contra_tese", "forca_corrente_contraria" e "risco_adocao".
+Mesmo quando o tema é consolidado, existe uma corrente minoritária ou risco de mudança
+regulatória. Se o tema for verdadeiramente sem precedente, indique isso explicitamente.
+Nunca retorne null para "contra_tese" — use "Não há corrente contrária consolidada, mas
+o tema ainda não foi testado pelo Comitê Gestor." como fallback mínimo.
 
 ## [FULL]
 LINGUAGEM CORPORATIVA — substituições obrigatórias:
@@ -135,14 +144,14 @@ e LC 227/2026 são as normas ativas da Reforma Tributária.
 
 M3-PERTINÊNCIA: Se os trechos recuperados não são diretamente relevantes
 para a consulta (score baixo ou tema tangencial), declare explicitamente
-a limitação e reduza nivel_confianca.
+a limitação e reduza scoring_confianca.
 
 M4-CONSISTÊNCIA: scoring_confianca e grau_consolidacao devem ser coerentes.
 Se a evidência é fraca (poucos trechos, scores baixos), NÃO declare
-confiança alta. Se o tema é consolidado, NÃO declare grau indefinido.
+scoring_confianca = "alto". Se o tema é consolidado, NÃO declare grau "sem_precedente".
 
 REGRA DE BLOQUEIO: se não encontrar fundamento legal nos trechos, retorne
-nivel_confianca < 0.3 e posicao_mercado = "sem_precedente"."""
+scoring_confianca = "baixo" e grau_consolidacao = "sem_precedente"."""
 
 COT_INSTRUCTION = """
 Antes de responder, raciocine passo a passo:
@@ -235,6 +244,8 @@ class AnaliseResult:
     model_id: str
     latencia_ms: int
     retrieval_strategy: str = "standard"
+    forca_corrente_contraria: Optional[str] = None
+    risco_adocao: Optional[str] = None
 
 
 _anthropic_client: Optional[anthropic.Anthropic] = None
@@ -725,6 +736,8 @@ def _registrar_interacao(
     user_id: Optional[str] = None,
     premissas: Optional[list[str]] = None,
     riscos_fiscais: Optional[list[str]] = None,
+    forca_corrente_contraria: Optional[str] = None,
+    contra_tese_presente: bool = False,
 ) -> None:
     """Registra em ai_interactions."""
     # Opção A: UUID de bypass (BYPASS_AUTH) não existe em users — gravar NULL
@@ -747,8 +760,9 @@ def _registrar_interacao(
                 chunks_pre_filtro, chunks_pos_filtro, lockfile_id,
                 hyde_activated, multi_query_activated, query_variations_count,
                 step_back_activated, step_back_query, user_id,
-                premissas, riscos_fiscais, p2_concluido
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                premissas, riscos_fiscais, p2_concluido,
+                forca_corrente_contraria, contra_tese_presente
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 query,
@@ -781,6 +795,8 @@ def _registrar_interacao(
                 _premissas_pg,
                 _riscos_pg,
                 _p2_concluido,
+                forca_corrente_contraria,
+                contra_tese_presente,
             ),
         )
         conn.commit()
@@ -1142,14 +1158,20 @@ def _analisar_inner(
     else:
         resposta = dados.get("resposta", "")
 
+    _contra_tese = dados.get("contra_tese") or (
+        "Não há corrente contrária consolidada, mas o tema ainda não foi testado "
+        "pelo Comitê Gestor."
+    )
     resultado = AnaliseResult(
         query=query,
         chunks=chunks,
         qualidade=qualidade,
         fundamento_legal=dados.get("fundamento_legal", []),
-        grau_consolidacao=dados.get("grau_consolidacao", "indefinido"),
-        contra_tese=dados.get("contra_tese"),
+        grau_consolidacao=dados.get("grau_consolidacao", "sem_precedente"),
+        contra_tese=_contra_tese,
         scoring_confianca=dados.get("scoring_confianca", "baixo"),
+        forca_corrente_contraria=dados.get("forca_corrente_contraria"),
+        risco_adocao=dados.get("risco_adocao"),
         resposta=resposta,
         disclaimer=disclaimer,
         anti_alucinacao=anti,
@@ -1201,7 +1223,9 @@ def _analisar_inner(
                         hyde_activated=_hyde_activated,
                         user_id=user_id,
                         premissas=premissas,
-                        riscos_fiscais=riscos_fiscais)
+                        riscos_fiscais=riscos_fiscais,
+                        forca_corrente_contraria=dados.get("forca_corrente_contraria"),
+                        contra_tese_presente=bool(dados.get("contra_tese")))
     logger.info("Análise concluída: status=%s score=%s latência=%dms flags=%s",
                 qualidade.status, dados.get("scoring_confianca"), latencia_ms, all_flags)
 
