@@ -12,19 +12,14 @@ Diferença do mau.py (login-based):
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date
 from typing import Optional
 
-import psycopg2
+from src.db.pool import get_conn, put_conn
 
 logger = logging.getLogger(__name__)
 
 _BYPASS_UUID = "00000000-0000-0000-0000-000000000000"
-
-
-def _get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 def _primeiro_dia_mes(referencia: Optional[date] = None) -> date:
@@ -65,7 +60,7 @@ def registrar_evento_mau(user_id: Optional[str]) -> bool:
 
     active_month = _primeiro_dia_mes()
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         tenant_id = _obter_tenant_id(conn, user_id)
         if not tenant_id:
@@ -93,13 +88,13 @@ def registrar_evento_mau(user_id: Optional[str]) -> bool:
         logger.warning("MAU: erro ao registrar evento para user %s: %s", user_id, e)
         return False
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def obter_mau_mes(mes: Optional[date] = None) -> int:
     """Retorna o total de MAU (usuários únicos) para o mês especificado."""
     active_month = _primeiro_dia_mes(mes)
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -112,7 +107,7 @@ def obter_mau_mes(mes: Optional[date] = None) -> int:
         logger.warning("MAU: erro ao consultar mau_mes: %s", e)
         return 0
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def obter_serie_mau(meses: int = 6) -> list[dict]:
@@ -120,7 +115,7 @@ def obter_serie_mau(meses: int = 6) -> list[dict]:
     Série histórica de MAU dos últimos N meses.
     Retorna lista de dicts: {active_month, mau, eventos}.
     """
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -144,7 +139,7 @@ def obter_serie_mau(meses: int = 6) -> list[dict]:
         logger.warning("MAU: erro ao obter série: %s", e)
         return []
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def obter_detalhamento_usuarios(mes: Optional[date] = None) -> list[dict]:
@@ -152,7 +147,7 @@ def obter_detalhamento_usuarios(mes: Optional[date] = None) -> list[dict]:
     Detalhamento de usuários ativos no mês — usado no painel admin.
     """
     active_month = _primeiro_dia_mes(mes)
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -177,4 +172,4 @@ def obter_detalhamento_usuarios(mes: Optional[date] = None) -> list[dict]:
         logger.warning("MAU: erro ao obter detalhamento: %s", e)
         return []
     finally:
-        conn.close()
+        put_conn(conn)
