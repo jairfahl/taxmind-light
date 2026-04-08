@@ -60,6 +60,7 @@ from src.outputs.engine import OutputClass, OutputEngine, OutputError, OutputRes
 from src.outputs.stakeholders import StakeholderTipo
 from src.quality.engine import QualidadeStatus
 from src.rag.retriever import ChunkResultado, retrieve
+from src.billing.mau_tracker import registrar_evento_mau
 
 load_dotenv()
 
@@ -375,6 +376,12 @@ def analyze(request: Request, req: AnalyzeRequest):
                 "qualidade_status": "vermelho",
             },
         )
+
+    # Metering MAU (G26, DEC-08) — falha silenciosa, nunca bloqueia a análise
+    try:
+        registrar_evento_mau(user_id=req.user_id)
+    except Exception:
+        pass
 
     return _analise_to_dict(resultado)
 

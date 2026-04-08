@@ -11,10 +11,17 @@ import streamlit as st
 import psycopg2
 import psycopg2.extras
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 
+import pandas as pd
+
 from auth import gerar_hash_senha, buscar_usuario_por_id
+from src.billing.mau_tracker import (
+    obter_mau_mes,
+    obter_serie_mau,
+    obter_detalhamento_usuarios,
+)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -499,6 +506,80 @@ def _render_secao_legal_hold() -> None:
     st.dataframe(pd.DataFrame(dados), use_container_width=True, hide_index=True)
 
 
+# ─── SEÇÃO D — MAU METERING ────────────────────────────────────────────────────
+
+def _render_secao_mau() -> None:
+    """Painel de MAU — Monthly Active Users (G26, DEC-08)."""
+    st.subheader("MAU — Monthly Active Users")
+    st.caption(
+        "Usuário ativo = realizou ao menos uma análise no mês. "
+        "Login passivo não conta. DEC-08 (ESP-15)."
+    )
+
+    mes_atual = date.today().strftime("%B/%Y")
+
+    try:
+        mau_atual = obter_mau_mes()
+        st.metric(f"MAU — {mes_atual}", mau_atual)
+    except Exception as e:
+        st.error(f"Erro ao carregar MAU: {e}")
+        return
+
+    # Série histórica (6 meses)
+    try:
+        serie = obter_serie_mau(6)
+        if serie:
+            dados_serie = [
+                {
+                    "Mês": s["active_month"].strftime("%m/%Y"),
+                    "MAU": s["mau"],
+                    "Total de Análises": s["eventos"],
+                }
+                for s in serie
+            ]
+            st.dataframe(
+                pd.DataFrame(dados_serie),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("Sem histórico de MAU ainda.")
+    except Exception as e:
+        st.warning(f"Histórico indisponível: {e}")
+
+    # Detalhamento do mês atual
+    st.subheader(f"Usuários ativos — {mes_atual}")
+    try:
+        usuarios = obter_detalhamento_usuarios()
+        if usuarios:
+            dados_users = [
+                {
+                    "Nome": u["nome"],
+                    "Email": u["email"],
+                    "Perfil": u["perfil"],
+                    "Análises no mês": u["total_eventos"],
+                    "Primeiro acesso": (
+                        u["primeiro_evento"].strftime("%d/%m %H:%M")
+                        if u.get("primeiro_evento") else "—"
+                    ),
+                    "Último acesso": (
+                        u["ultimo_evento"].strftime("%d/%m %H:%M")
+                        if u.get("ultimo_evento") else "—"
+                    ),
+                }
+                for u in usuarios
+            ]
+            st.dataframe(
+                pd.DataFrame(dados_users),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("Nenhum usuário ativo este mês ainda.")
+    except Exception as e:
+        st.warning(f"Detalhamento indisponível: {e}")
+
+
 # ─── ENTRY POINT ───────────────────────────────────────────────────────────────
 
 def render_painel_admin():
@@ -514,7 +595,9 @@ def render_painel_admin():
 
     st.title("⚙️ Administração")
 
-    sec_a, sec_b, sec_c = st.tabs(["👥 Usuários", "💰 Consumo de API", "🔒 Legal Hold"])
+    sec_a, sec_b, sec_c, sec_d = st.tabs(
+        ["👥 Usuários", "💰 Consumo de API", "🔒 Legal Hold", "📊 MAU"]
+    )
 
     with sec_a:
         _render_secao_usuarios()
@@ -524,3 +607,6 @@ def render_painel_admin():
 
     with sec_c:
         _render_secao_legal_hold()
+
+    with sec_d:
+        _render_secao_mau()
