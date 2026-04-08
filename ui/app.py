@@ -17,6 +17,7 @@ from src.cognitive.detector_carimbo import detectar_carimbo as _detectar_carimbo
 from ui.components.grau_consolidacao import exibir_painel_governanca
 from ui.components.qualificacao_fatica import coletar_qualificacao_fatica
 from ui.pages.simulador_carga import render_simulador_carga
+from ui.pages.simulador_split_payment import render_simulador_split_payment
 
 load_dotenv()
 
@@ -2151,10 +2152,14 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
             st.error("API offline.")
 
 # ===========================================================================
-# ABA 5 — Simuladores (MP-01 Carga RT)
+# ABA 5 — Simuladores (MP-01 Carga RT + MP-05 Split Payment)
 # ===========================================================================
 with aba5:
-    render_simulador_carga()
+    sim_tab1, sim_tab2 = st.tabs(["Carga RT", "Split Payment"])
+    with sim_tab1:
+        render_simulador_carga()
+    with sim_tab2:
+        render_simulador_split_payment()
 
 # ===========================================================================
 # ABA ADMIN — Painel de Gerenciamento de Usuários (apenas ADMIN)
