@@ -11,12 +11,11 @@ Recálculo automático de cenários: Onda 2+.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
-import psycopg2
+from src.db.pool import get_conn, put_conn
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +41,6 @@ TEMAS_CONFIG: dict[str, str] = {
 }
 
 
-def _get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
-
-
 # ── DETECÇÃO DE PADRÕES ───────────────────────────────────────────────────────
 
 def registrar_tags_analise(
@@ -64,7 +59,7 @@ def registrar_tags_analise(
     if not temas_validos:
         return
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn:
             with conn.cursor() as cur:
@@ -84,7 +79,7 @@ def registrar_tags_analise(
     except Exception as e:
         logger.warning("Proatividade: erro ao registrar tags para user %s: %s", user_id, e)
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def detectar_padroes(user_id: Optional[str]) -> list[dict]:
@@ -98,7 +93,7 @@ def detectar_padroes(user_id: Optional[str]) -> list[dict]:
 
     janela_inicio = date.today() - timedelta(days=JANELA_DIAS)
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -126,7 +121,7 @@ def detectar_padroes(user_id: Optional[str]) -> list[dict]:
         logger.warning("Proatividade: erro ao detectar padrões para user %s: %s", user_id, e)
         return []
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 # ── GERADOR DE SUGESTÕES ──────────────────────────────────────────────────────
@@ -181,7 +176,7 @@ def silenciar_sugestao(
 ) -> bool:
     """Silencia sugestão para o tema por N dias."""
     silenciado_ate = date.today() + timedelta(days=dias)
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn:
             with conn.cursor() as cur:
@@ -200,7 +195,7 @@ def silenciar_sugestao(
         logger.warning("Proatividade: erro ao silenciar tema %s: %s", tema, e)
         return False
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def ativar_monitoramento_tema(user_id: str, tema: str) -> bool:
@@ -208,7 +203,7 @@ def ativar_monitoramento_tema(user_id: str, tema: str) -> bool:
     Usuário confirma monitoramento do tema.
     Marca sugestao_ativa = FALSE — não mostrar mais como sugestão.
     """
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn:
             with conn.cursor() as cur:
@@ -226,4 +221,4 @@ def ativar_monitoramento_tema(user_id: str, tema: str) -> bool:
         logger.warning("Proatividade: erro ao ativar monitoramento: %s", e)
         return False
     finally:
-        conn.close()
+        put_conn(conn)
