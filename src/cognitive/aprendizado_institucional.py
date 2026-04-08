@@ -16,19 +16,14 @@ Proatividade Customizada completa (RDM-008): Onda D (D5).
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date, timedelta
 from typing import Optional
 
-import psycopg2
+from src.db.pool import get_conn, put_conn
 
 logger = logging.getLogger(__name__)
 
 PRAZO_VALIDADE_HEURISTICA_DIAS = 180  # 6 meses — revisão semestral DC v7
-
-
-def _get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +96,7 @@ def extrair_heuristicas_caso(
     validade = date.today() + timedelta(days=PRAZO_VALIDADE_HEURISTICA_DIAS)
     heuristicas_geradas: list[dict] = []
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             # Buscar dossiê associado ao monitoramento pelo case_id
@@ -208,7 +203,7 @@ def extrair_heuristicas_caso(
         return heuristicas_geradas
 
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +226,7 @@ def buscar_heuristicas_relevantes(
     if not termos:
         return []
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -253,7 +248,7 @@ def buscar_heuristicas_relevantes(
         logger.debug("buscar_heuristicas_relevantes falhou: %s", e)
         return []
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +263,7 @@ def verificar_heuristicas_expiradas(user_id: Optional[str]) -> int:
     if not user_id:
         return 0
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn:
             with conn.cursor() as cur:
@@ -294,7 +289,7 @@ def verificar_heuristicas_expiradas(user_id: Optional[str]) -> int:
         logger.debug("verificar_heuristicas_expiradas falhou: %s", e)
         return 0
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +305,7 @@ def calcular_metricas_usuario(user_id: Optional[str]) -> dict:
     if not user_id:
         return vazio
 
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -345,4 +340,4 @@ def calcular_metricas_usuario(user_id: Optional[str]) -> dict:
         logger.debug("calcular_metricas_usuario falhou: %s", e)
         return vazio
     finally:
-        conn.close()
+        put_conn(conn)
