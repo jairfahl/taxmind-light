@@ -184,6 +184,9 @@ def _analise_to_dict(resultado: AnaliseResult) -> dict:
         "latencia_ms": resultado.latencia_ms,
         "retrieval_strategy": resultado.retrieval_strategy,
         "saidas_stakeholders": resultado.saidas_stakeholders,
+        "criticidade": resultado.criticidade,
+        "criticidade_justificativa": resultado.criticidade_justificativa,
+        "criticidade_impacto": resultado.criticidade_impacto,
     }
 
 

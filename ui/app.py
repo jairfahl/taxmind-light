@@ -17,6 +17,8 @@ from src.cognitive.detector_carimbo import detectar_carimbo as _detectar_carimbo
 from ui.components.grau_consolidacao import exibir_painel_governanca
 from ui.components.qualificacao_fatica import coletar_qualificacao_fatica
 from ui.components.saidas_stakeholder import exibir_saidas_stakeholder
+from ui.components.badge_criticidade import exibir_badge_criticidade, exibir_badge_compacto
+from src.cognitive.criticidade import NivelCriticidade, ResultadoCriticidade
 from src.outputs.disclaimer import render_disclaimer_streamlit
 from ui.pages.simulador_carga import render_simulador_carga
 from ui.pages.simulador_split_payment import render_simulador_split_payment
@@ -490,6 +492,17 @@ with aba1:
             "sem_precedente": "❓", "indefinido": "❓",
         }.get(grau, "")
         st.caption(f"Consenso de Mercado: {grau_icon} {grau_label}")
+
+        # Badge de criticidade (D3, G17) — antes do painel de governança
+        try:
+            _crit_resultado = ResultadoCriticidade(
+                nivel=NivelCriticidade(data.get("criticidade", "informativo")),
+                justificativa=data.get("criticidade_justificativa", ""),
+                impacto_estimado=data.get("criticidade_impacto", ""),
+            )
+            exibir_badge_criticidade(_crit_resultado)
+        except Exception:
+            pass
 
         exibir_painel_governanca(
             grau=data.get("grau_consolidacao", ""),
@@ -1038,6 +1051,17 @@ with aba3:
                         if _analise.get("disclaimer"):
                             st.caption("Ressalva")
                             st.warning(_sanitize_latex(_analise["disclaimer"]))
+                        # Badge de criticidade (D3, G17)
+                        try:
+                            _crit_ro = ResultadoCriticidade(
+                                nivel=NivelCriticidade(_analise.get("criticidade", "informativo")),
+                                justificativa=_analise.get("criticidade_justificativa", ""),
+                                impacto_estimado=_analise.get("criticidade_impacto", ""),
+                            )
+                            exibir_badge_criticidade(_crit_ro)
+                        except Exception:
+                            pass
+
                         if _analise.get("saidas_stakeholders"):
                             exibir_saidas_stakeholder(_analise["saidas_stakeholders"])
 

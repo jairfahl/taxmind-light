@@ -47,6 +47,7 @@ from src.cognitive.qualificacao_fatica import calcular_semaforo, formatar_fatos_
 from src.rag.vigencia_checker import AlertaVigencia, alertas_para_dict, verificar_vigencia_resposta
 from src.outputs.stakeholders_inline import gerar_resumos_stakeholders, resumos_para_dict
 from src.outputs.disclaimer import validar_disclaimer_presente, DISCLAIMER_TEXTO
+from src.cognitive.criticidade import classificar_criticidade
 
 load_dotenv()
 
@@ -252,6 +253,9 @@ class AnaliseResult:
     risco_adocao: Optional[str] = None
     alertas_vigencia: list[AlertaVigencia] = field(default_factory=list)
     saidas_stakeholders: list[dict] = field(default_factory=list)
+    criticidade: str = "informativo"
+    criticidade_justificativa: str = ""
+    criticidade_impacto: str = ""
 
 
 _anthropic_client: Optional[anthropic.Anthropic] = None
@@ -1284,6 +1288,44 @@ def _analisar_inner(
                         alertas_vigencia=_alertas_vigencia_todos)
     logger.info("Análise concluída: status=%s score=%s latência=%dms flags=%s",
                 qualidade.status, dados.get("scoring_confianca"), latencia_ms, all_flags)
+
+    # Calibração por Criticidade (D3, G17) — classifica e persiste
+    try:
+        _crit = classificar_criticidade(
+            resposta_ia=resultado.resposta,
+            grau_consolidacao=dados.get("grau_consolidacao", ""),
+            forca_contra_tese=dados.get("forca_corrente_contraria", ""),
+            impacto_financeiro_estimado=0.0,
+        )
+        resultado.criticidade = _crit.nivel.value
+        resultado.criticidade_justificativa = _crit.justificativa
+        resultado.criticidade_impacto = _crit.impacto_estimado
+        # Persistir nos campos adicionados pela migration 114
+        try:
+            _cur_crit = conn.cursor()
+            _cur_crit.execute(
+                """
+                UPDATE ai_interactions
+                   SET criticidade = %s, criticidade_motivo = %s
+                 WHERE query_texto = %s AND model_id = %s
+                   AND id = (
+                       SELECT id FROM ai_interactions
+                        WHERE query_texto = %s AND model_id = %s
+                        ORDER BY created_at DESC LIMIT 1
+                   )
+                """,
+                (
+                    _crit.nivel.value, _crit.justificativa,
+                    query, model,
+                    query, model,
+                ),
+            )
+            conn.commit()
+            _cur_crit.close()
+        except Exception as _db_crit_err:
+            logger.debug("Criticidade não persistida no banco: %s", _db_crit_err)
+    except Exception as _crit_err:
+        logger.debug("Calibração de criticidade ignorada: %s", _crit_err)
 
     # Saídas por Stakeholder (C3, G16) — falhas individuais não bloqueiam retorno
     try:
