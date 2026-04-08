@@ -13,21 +13,16 @@ Princípio: análise que não acessa o texto referenciado pode inventar o que es
 from __future__ import annotations
 
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-import psycopg2
+from src.db.pool import get_conn, put_conn
 
 logger = logging.getLogger(__name__)
 
 MAX_REMISSOES_POR_QUERY = 3   # limite para controlar tokens
 MAX_CHUNKS_POR_REMISSAO = 2   # máximo de chunks por norma referenciada
-
-
-def _get_conn():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 @dataclass
@@ -59,7 +54,7 @@ def _buscar_chunks_norma(
     Se artigo fornecido, busca chunks daquele artigo específico.
     Retorna dicts com: chunk_id, norma_id, norma_codigo, artigo, texto.
     """
-    conn = _get_conn()
+    conn = get_conn()
     try:
         with conn.cursor() as cur:
             if artigo:
@@ -90,7 +85,7 @@ def _buscar_chunks_norma(
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
-        conn.close()
+        put_conn(conn)
 
 
 def _extrair_artigo_da_remissao(conteudo_chunk: str) -> Optional[str]:
