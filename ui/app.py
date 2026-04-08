@@ -23,7 +23,9 @@ from ui.pages.monitor_creditos import render_monitor_creditos
 from ui.pages.simulador_reestruturacao import render_simulador_reestruturacao
 from ui.pages.simulador_is import render_calculadora_is
 from ui.pages.ciclo_pos_decisao import render_ciclo_pos_decisao
+from ui.pages.painel_aprendizado import render_painel_aprendizado
 from src.cognitive.monitoramento_p6 import ativar_monitoramento_p6
+from src.cognitive.aprendizado_institucional import buscar_heuristicas_relevantes
 
 load_dotenv()
 
@@ -328,6 +330,25 @@ with aba1:
     st.title("Tribus-AI — Reforma Tributária")
     st.caption("Análise tributária com base legislativa verificada · Esta análise não substitui a avaliação do seu time fiscal")
 
+    # Alertas proativos de aprendizado institucional (C6, G24)
+    try:
+        _user_id_consultar = st.session_state.get("user_id")
+        _query_anterior = st.session_state.get("_ultima_query_consultar", "")
+        if _query_anterior and _user_id_consultar:
+            _alertas_inst = buscar_heuristicas_relevantes(
+                query=_query_anterior,
+                user_id=_user_id_consultar,
+            )
+            if _alertas_inst:
+                with st.expander(
+                    f"💡 {len(_alertas_inst)} aprendizado(s) institucional(is) relevante(s)",
+                    expanded=False,
+                ):
+                    for _al in _alertas_inst:
+                        st.info(f"**{_al['titulo']}**\n\n{_al['descricao']}")
+    except Exception:
+        pass
+
     _lbl("Sua consulta", "Digite sua dúvida tributária relacionada à Reforma Tributária (IBS, CBS, ICMS, alíquotas, etc.). O sistema buscará na legislação e gerará uma análise fundamentada.")
     query = st.text_area(
         "Sua consulta",
@@ -386,6 +407,8 @@ with aba1:
             st.stop()
 
         data = resp.json()
+        # Persistir query para alertas proativos na próxima visita
+        st.session_state["_ultima_query_consultar"] = query
         status = data["qualidade"]["status"]
         scoring = data["scoring_confianca"]
 
@@ -1630,12 +1653,18 @@ with aba3:
                         st.rerun()
 
     # ------------------------------------------------------------------
-    # P6 — Ciclo Pós-Decisão (sub-tab ao final do Protocolo)
+    # P6 + Aprendizado Institucional (sub-tabs ao final do Protocolo)
     # ------------------------------------------------------------------
     st.divider()
-    _tab_protocolo_fin, _tab_p6 = st.tabs(["P1–P5 (acima)", "P6 — Ciclo Pós-Decisão"])
+    _tab_protocolo_fin, _tab_p6, _tab_aprendizado = st.tabs([
+        "P1–P5 (acima)",
+        "P6 — Ciclo Pós-Decisão",
+        "🧠 Aprendizado Institucional",
+    ])
     with _tab_p6:
         render_ciclo_pos_decisao()
+    with _tab_aprendizado:
+        render_painel_aprendizado()
     with _tab_protocolo_fin:
         st.caption("O conteúdo do Protocolo P1–P5 está acima nesta mesma aba.")
 

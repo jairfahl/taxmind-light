@@ -89,6 +89,7 @@ def ativar_monitoramento_p6(
 def registrar_resultado_real(
     monitoramento_id: str,
     resultado_real: str,
+    user_id: Optional[str] = None,
 ) -> dict:
     """Gestor registra o que efetivamente aconteceu após a decisão."""
     conn = _get_conn()
@@ -106,9 +107,22 @@ def registrar_resultado_real(
                     """,
                     (resultado_real, monitoramento_id),
                 )
-        return {"sucesso": True}
     finally:
         conn.close()
+
+    # Disparar extração de heurísticas — falha não bloqueia o encerramento
+    try:
+        from src.cognitive.aprendizado_institucional import extrair_heuristicas_caso
+        heuristicas = extrair_heuristicas_caso(
+            monitoramento_id=monitoramento_id,
+            resultado_real=resultado_real,
+            user_id=user_id,
+        )
+        return {"sucesso": True, "heuristicas_geradas": len(heuristicas)}
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning("Aprendizado: erro ao extrair heurísticas: %s", _e)
+        return {"sucesso": True, "heuristicas_geradas": 0}
 
 
 def verificar_premissas_ativas(
