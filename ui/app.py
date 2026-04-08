@@ -16,6 +16,7 @@ from src.cognitive.metodos import METODOS_ANALISE, MAX_METODOS, sugerir_metodos
 from src.cognitive.detector_carimbo import detectar_carimbo as _detectar_carimbo
 from ui.components.grau_consolidacao import exibir_painel_governanca
 from ui.components.qualificacao_fatica import coletar_qualificacao_fatica
+from ui.pages.simulador_carga import render_simulador_carga
 
 load_dotenv()
 
@@ -303,12 +304,12 @@ else:
 is_admin = st.session_state.get("user_is_admin", False)
 
 if is_admin:
-    aba1, aba2, aba3, aba4, tab_admin = st.tabs([
-        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos", "⚙️ Admin"
+    aba1, aba2, aba3, aba4, aba5, tab_admin = st.tabs([
+        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos", "Simuladores", "⚙️ Admin"
     ])
 else:
-    aba1, aba2, aba3, aba4 = st.tabs([
-        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos"
+    aba1, aba2, aba3, aba4, aba5 = st.tabs([
+        "Consultar", "Adicionar Norma", "Protocolo de Decisão", "Documentos", "Simuladores"
     ])
     tab_admin = None
 
@@ -2148,6 +2149,12 @@ if False:  # noqa: Aba oculta durante fase de testes com usuários
                 st.error(rb.json().get("detail", rb.text[:200]))
         except httpx.ConnectError:
             st.error("API offline.")
+
+# ===========================================================================
+# ABA 5 — Simuladores (MP-01 Carga RT)
+# ===========================================================================
+with aba5:
+    render_simulador_carga()
 
 # ===========================================================================
 # ABA ADMIN — Painel de Gerenciamento de Usuários (apenas ADMIN)
