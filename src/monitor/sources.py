@@ -227,6 +227,60 @@ def _check_rfb(url: str) -> list[DocumentoDetectado]:
     return docs
 
 
+def _check_sijut2(url: str) -> list[DocumentoDetectado]:
+    """
+    Busca atos normativos recentes no SIJUT2 (Receita Federal).
+    Usa parâmetros GET para busca por termos da Reforma Tributária.
+    URL base: https://normas.receita.fazenda.gov.br/sijut2consulta/consulta.action
+    """
+    termos_busca = "IBS CBS reforma tributária imposto seletivo split payment"
+    url_busca = (
+        f"{url}?visao=anonima"
+        f"&txtPesquisa={termos_busca.replace(' ', '+')}"
+        f"&chkTipoDocumento=on"
+        f"&hdnTipoDocumento="
+    )
+
+    html = _fetch(url_busca)
+    if not html:
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    docs: list[DocumentoDetectado] = []
+
+    # SIJUT2 retorna resultados em tabela ou lista de links de atos
+    for item in soup.select("a[href]"):
+        texto = item.get_text(strip=True)
+        href = item.get("href", "")
+
+        if len(texto) < 10:
+            continue
+
+        # Filtrar por atos normativos relevantes
+        termos = [
+            "instrução normativa", "IN RFB", "portaria", "resolução",
+            "IBS", "CBS", "reforma tributária", "imposto seletivo",
+            "split payment", "LC 214", "LC 227", "EC 132",
+        ]
+        if not any(t.lower() in texto.lower() for t in termos):
+            continue
+
+        if href and not href.startswith("http"):
+            base = "https://normas.receita.fazenda.gov.br"
+            href = f"{base}{href}" if href.startswith("/") else f"{base}/sijut2consulta/{href}"
+
+        docs.append(DocumentoDetectado(
+            titulo=texto[:500],
+            url=href or None,
+            data_publicacao=None,
+            resumo=None,
+            fonte_tipo="sijut2",
+        ))
+
+    logger.info("SIJUT2: %d documentos encontrados", len(docs))
+    return docs
+
+
 # Mapa de checkers por tipo de fonte
 CHECKERS = {
     "dou": _check_dou,
@@ -234,4 +288,5 @@ CHECKERS = {
     "cgibs": _check_cgibs,
     "nfe": _check_nfe,
     "rfb": _check_rfb,
+    "sijut2": _check_sijut2,
 }
