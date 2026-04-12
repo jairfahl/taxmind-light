@@ -4,6 +4,8 @@ import { Card } from "@/components/shared/Card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
+import { GuiaSimulador } from "./GuiaSimulador";
+import { GUIA_CARGA_RT } from "./guias";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -86,6 +88,7 @@ export function SimuladorCargaRT() {
         <Button onClick={simular} disabled={loading} className="mt-4 bg-primary text-primary-foreground w-full">
           {loading ? "Simulando…" : "Simular"}
         </Button>
+        <GuiaSimulador {...GUIA_CARGA_RT} />
       </Card>
 
       {resultado && (

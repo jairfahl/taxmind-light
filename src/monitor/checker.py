@@ -5,6 +5,7 @@ Compara documentos encontrados contra a tabela monitor_documentos.
 Novos documentos sao inseridos com status='novo' para revisao pelo usuario.
 """
 
+import concurrent.futures
 import logging
 import os
 from dataclasses import dataclass
@@ -136,10 +137,25 @@ def verificar_todas_fontes() -> list[CheckResult]:
         if conn:
             put_conn(conn)
 
+    _PER_SOURCE_TIMEOUT = 30  # seconds — prevents one slow/down source from blocking the endpoint
+
     resultados: list[CheckResult] = []
-    for fonte_id, nome, url, tipo in fontes:
-        resultado = verificar_fonte(fonte_id, nome, url, tipo)
-        resultados.append(resultado)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(fontes) or 1) as executor:
+        future_to_fonte = {
+            executor.submit(verificar_fonte, fonte_id, nome, url, tipo): (nome, tipo)
+            for fonte_id, nome, url, tipo in fontes
+        }
+        for future in concurrent.futures.as_completed(future_to_fonte, timeout=_PER_SOURCE_TIMEOUT * len(fontes) + 5):
+            nome_f, tipo_f = future_to_fonte[future]
+            try:
+                resultado = future.result(timeout=_PER_SOURCE_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                logger.warning("Timeout ao verificar fonte %s (%s)", nome_f, tipo_f)
+                resultado = CheckResult(nome_f, tipo_f, 0, 0, "Timeout ao verificar fonte")
+            except Exception as e:
+                logger.error("Erro ao verificar fonte %s: %s", nome_f, e)
+                resultado = CheckResult(nome_f, tipo_f, 0, 0, str(e))
+            resultados.append(resultado)
 
     total_novos = sum(r.novos for r in resultados)
     logger.info("Monitor: %d fontes verificadas, %d documentos novos", len(resultados), total_novos)

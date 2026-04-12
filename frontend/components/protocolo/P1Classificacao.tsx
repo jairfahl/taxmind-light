@@ -14,7 +14,7 @@ const METODOS_SUGERIDOS = [
 ];
 
 export function P1Classificacao() {
-  const { query, metodos, set, setStep } = useProtocoloStore();
+  const { query, metodos, topK, set, setStep } = useProtocoloStore();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -74,6 +74,29 @@ export function P1Classificacao() {
                 {m}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Slider top_k */}
+        <div className="pt-3 border-t border-border">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              Trechos consultados
+            </label>
+            <span className="text-xs font-semibold text-primary tabular-nums">{topK}</span>
+          </div>
+          <input
+            type="range"
+            min={3}
+            max={10}
+            value={topK}
+            onChange={(e) => set({ topK: Number(e.target.value) })}
+            className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-border accent-primary"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
+            <span>3</span>
+            <span className="text-muted-foreground/60">Mais trechos = resposta mais completa, porém mais lenta</span>
+            <span>10</span>
           </div>
         </div>
 

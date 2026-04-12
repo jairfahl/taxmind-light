@@ -68,6 +68,13 @@
 
   /* Radius — usa escala do tokens.css */
   --radius: var(--radius-md, 0.625rem);
+
+  /* ── UI Upgrade tokens (Abril 2026) ─────────────────────────────────── */
+  --shadow-card:        0 2px 8px rgba(31,56,100,.08);
+  --shadow-card-hover:  0 6px 20px rgba(31,56,100,.14);
+  --gradient-primary:   linear-gradient(135deg, #2E75B6 0%, #1F3864 100%);
+  --color-accent-vivid: #3B9EE8;
+  --color-bg-sidebar:   #1a2f4e;   /* override: sidebar dark navy */
 }
 
 /* ── Tailwind v4: extensões via @theme inline ────────────────────────────
@@ -243,5 +250,62 @@
     border-left: 4px solid var(--color-accent);
     border-radius: var(--radius, 8px);
     padding: 14px 18px;
+  }
+}
+
+/* ── Botão primário — gradiente + elevação ───────────────────────────────
+   Sobrescreve shadcn Button[variant=default] que usa bg-primary.
+   ──────────────────────────────────────────────────────────────────────── */
+@layer components {
+  button[class*="bg-primary"],
+  a[class*="bg-primary"] {
+    background: var(--gradient-primary) !important;
+    box-shadow: 0 2px 8px rgba(46,117,182,.35);
+    transition: box-shadow 180ms ease, transform 180ms ease;
+  }
+  button[class*="bg-primary"]:hover:not(:disabled),
+  a[class*="bg-primary"]:hover {
+    box-shadow: 0 6px 20px rgba(46,117,182,.40);
+    transform: scale(1.02);
+  }
+  button[class*="bg-primary"]:active:not(:disabled),
+  a[class*="bg-primary"]:active {
+    transform: scale(0.98);
+  }
+  button[class*="bg-primary"]:disabled {
+    opacity: 0.6;
+  }
+
+  /* Textarea e inputs — foco com accent vivid */
+  textarea:focus-visible,
+  input[type="text"]:focus-visible,
+  input[type="email"]:focus-visible,
+  input[type="password"]:focus-visible {
+    border-color: var(--color-accent-vivid) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(59,158,232,.15) !important;
+    border-width: 1.5px !important;
+  }
+
+  /* Slider — cor de accent */
+  input[type="range"] {
+    accent-color: var(--color-accent-vivid);
+    cursor: pointer;
+  }
+}
+
+/* ── Dark mode (prefers-color-scheme) ───────────────────────────────────
+   Sem JS — CSS media query puro. Ícones Lucide usam currentColor, herdam.
+   ──────────────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background:       #0f172a;
+    --foreground:       #f1f5f9;
+    --card:             #1e293b;
+    --border:           rgba(255,255,255,.10);
+    --muted:            #334155;
+    --muted-foreground: #94a3b8;
+    --input:            #1e293b;
+    --color-bg-sidebar: #0f1e33;
   }
 }

@@ -134,7 +134,14 @@ class ProtocolStateEngine:
     # ------------------------------------------------------------------
     # Criação de caso
     # ------------------------------------------------------------------
-    def criar_caso(self, titulo: str, descricao: str, contexto_fiscal: str) -> int:
+    def criar_caso(
+        self,
+        titulo: str,
+        descricao: str,
+        contexto_fiscal: str,
+        premissas: Optional[list] = None,
+        periodo_fiscal: str = "",
+    ) -> int:
         """Cria um novo caso em Passo 1/rascunho. Retorna case_id."""
         conn = _get_conn()
         try:
@@ -144,9 +151,16 @@ class ProtocolStateEngine:
                 (titulo, descricao),
             )
             case_id = cur.fetchone()[0]
+            step1_dados = {
+                "titulo": titulo,
+                "descricao": descricao,
+                "contexto_fiscal": contexto_fiscal,
+                "premissas": premissas or [],
+                "periodo_fiscal": periodo_fiscal,
+            }
             cur.execute(
                 "INSERT INTO case_steps (case_id, passo, dados, concluido) VALUES (%s, 1, %s, FALSE)",
-                (case_id, json.dumps({"titulo": titulo, "descricao": descricao, "contexto_fiscal": contexto_fiscal})),
+                (case_id, json.dumps(step1_dados)),
             )
             _registrar_historico(cur, case_id, None, "rascunho", None, 1, "Caso criado")
             conn.commit()

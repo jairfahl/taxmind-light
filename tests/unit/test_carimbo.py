@@ -113,13 +113,14 @@ def test_confirmar_justificativa_vazia():
 # ---------------------------------------------------------------------------
 # 5. DetectorCarimbo.confirmar — alert_id inexistente
 # ---------------------------------------------------------------------------
-@patch("src.protocol.carimbo.psycopg2.connect")
-def test_confirmar_alert_id_inexistente(mock_connect):
+@patch("src.protocol.carimbo.put_conn")
+@patch("src.protocol.carimbo.get_conn")
+def test_confirmar_alert_id_inexistente(mock_get_conn, mock_put_conn):
     mock_conn = MagicMock()
     mock_cur = MagicMock()
     mock_conn.cursor.return_value = mock_cur
     mock_cur.rowcount = 0  # nenhuma linha atualizada
-    mock_connect.return_value = mock_conn
+    mock_get_conn.return_value = mock_conn
 
     detector = DetectorCarimbo()
     with pytest.raises(ValueError, match="não encontrado"):

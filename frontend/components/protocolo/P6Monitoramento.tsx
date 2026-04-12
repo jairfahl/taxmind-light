@@ -4,7 +4,7 @@ import { useProtocoloStore } from "@/store/protocolo";
 import { Card } from "@/components/shared/Card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Clock } from "lucide-react";
+import { CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 
 interface CasoListado {
@@ -13,6 +13,13 @@ interface CasoListado {
   status: string;
   passo_atual: number;
   created_at: string;
+}
+
+interface DriftAlert {
+  id: number;
+  query_original: string;
+  alerta_tipo: string;
+  criado_em: string;
 }
 
 export function P6Monitoramento() {
@@ -24,6 +31,7 @@ export function P6Monitoramento() {
   const [erro, setErro] = useState("");
   const [casos, setCasos] = useState<CasoListado[]>([]);
   const [loadingCasos, setLoadingCasos] = useState(true);
+  const [alertas, setAlertas] = useState<DriftAlert[]>([]);
 
   // Carregar lista de casos ativos
   useEffect(() => {
@@ -31,6 +39,13 @@ export function P6Monitoramento() {
       .then((r) => setCasos(r.data.filter((c) => c.status !== "encerrado").slice(0, 5)))
       .catch(() => setCasos([]))
       .finally(() => setLoadingCasos(false));
+  }, []);
+
+  // Carregar alertas de monitoramento ativos
+  useEffect(() => {
+    api.get<DriftAlert[]>("/v1/observability/drift")
+      .then((r) => setAlertas(r.data.slice(0, 3)))
+      .catch(() => setAlertas([]));
   }, []);
 
   const encerrar = async () => {
@@ -59,7 +74,7 @@ export function P6Monitoramento() {
 
   return (
     <div className="space-y-4">
-      <Card titulo="P6 — Monitoramento Pós-Decisão" acento="success">
+      <Card titulo="P6 — Monitoramento" acento="success">
         {!encerrado ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -146,6 +161,25 @@ export function P6Monitoramento() {
           </div>
         )}
       </Card>
+
+      {/* Alertas de monitoramento ativos */}
+      {alertas.length > 0 && (
+        <Card titulo="Alertas de monitoramento ativos">
+          <div className="space-y-2">
+            {alertas.map((a) => (
+              <div key={a.id} className="flex items-start gap-2 p-2.5 rounded border border-amber-200 bg-amber-50">
+                <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-amber-800 truncate">{a.alerta_tipo}</p>
+                  {a.query_original && (
+                    <p className="text-xs text-amber-700/80 mt-0.5 truncate">{a.query_original}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {!encerrado && (
         <div className="flex gap-3">

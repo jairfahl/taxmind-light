@@ -99,18 +99,19 @@ def _insert_output(
     versao_base: Optional[str],
 ) -> int:
     _assert_disclaimer(disclaimer)
+    imutavel = classe in (OutputClass.DOSSIE_DECISAO, OutputClass.MATERIAL_COMPARTILHAVEL)
     cur = conn.cursor()
     cur.execute(
         """
         INSERT INTO outputs
             (case_id, passo_origem, classe, status, titulo, conteudo,
-             materialidade, disclaimer, versao_prompt, versao_base)
-        VALUES (%s, %s, %s::output_class, 'gerado', %s, %s, %s, %s, %s, %s)
+             materialidade, disclaimer, versao_prompt, versao_base, imutavel)
+        VALUES (%s, %s, %s::output_class, 'gerado', %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
         (case_id, passo_origem, classe.value, titulo,
          json.dumps(conteudo, ensure_ascii=False),
-         materialidade, disclaimer, versao_prompt, versao_base),
+         materialidade, disclaimer, versao_prompt, versao_base, imutavel),
     )
     output_id = cur.fetchone()[0]
     conn.commit()

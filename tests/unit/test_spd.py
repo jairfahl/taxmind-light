@@ -169,8 +169,9 @@ class TestSPDRetrieve:
 # ---------------------------------------------------------------------------
 
 class TestListarNormasAtivas:
-    @patch("src.rag.spd.psycopg2.connect")
-    def test_retorna_codigos_do_banco(self, mock_connect):
+    @patch("src.rag.spd.put_conn")
+    @patch("src.rag.spd.get_conn")
+    def test_retorna_codigos_do_banco(self, mock_get_conn, mock_put_conn):
         """Deve retornar lista de codigos de normas vigentes."""
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
@@ -178,7 +179,7 @@ class TestListarNormasAtivas:
         ]
         mock_conn = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
-        mock_connect.return_value = mock_conn
+        mock_get_conn.return_value = mock_conn
 
         result = listar_normas_ativas()
 

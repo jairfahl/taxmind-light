@@ -31,7 +31,7 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -104,7 +104,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://tribus-ai.com.br", "http://localhost:8521"],
+    allow_origins=["https://tribus-ai.com.br", "http://localhost:8521", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -887,6 +887,106 @@ def _case_estado_to_dict(estado: CaseEstado) -> dict:
     }
 
 
+# --- Endpoint consolidado PME ---
+
+class RegistrarDecisaoRequest(BaseModel):
+    query: str = Field(..., min_length=5)
+    premissas: list[str] = Field(default_factory=list)
+    riscos: list[str] = Field(default_factory=list)
+    resultado_ia: str = Field(..., min_length=1)
+    grau_consolidacao: str = ""
+    contra_tese: str = ""
+    criticidade: str = "informativo"
+    hipotese_gestor: str = Field(..., min_length=1)
+    decisao_final: str = Field(..., min_length=1)
+    user_id: Optional[str] = None
+
+
+@app.post("/v1/registrar_decisao", dependencies=[Depends(verificar_token_api)])
+def registrar_decisao(req: RegistrarDecisaoRequest):
+    """
+    Endpoint consolidado para o fluxo PME de documentação (UX-03/04).
+    Cria o case, submete P1→P5, gera Dossiê com Legal Hold e ativa monitoramento P6.
+    """
+    logger.info("POST /v1/registrar_decisao query=%s", req.query[:60])
+    try:
+        from src.cognitive.monitoramento_p6 import ativar_monitoramento_p6
+
+        titulo = req.query[:80] if len(req.query) >= 10 else req.query.ljust(10, ".")
+        contexto = req.premissas[0] if req.premissas else "Contexto tributário geral."
+        premissas = req.premissas if len(req.premissas) >= 2 else req.premissas + [f"Análise: {req.query[:60]}"]
+        riscos = req.riscos if req.riscos else ["Risco a ser monitorado."]
+        periodo_fiscal = f"{datetime.now().year}-{datetime.now().year + 1}"
+
+        # P1 — criar caso
+        case_id = _protocol_engine.criar_caso(
+            titulo=titulo,
+            descricao=req.query,
+            contexto_fiscal=contexto,
+        )
+
+        # P1 — avancar
+        _protocol_engine.avancar(case_id, 1, {
+            "titulo": titulo,
+            "descricao": req.query,
+            "contexto_fiscal": contexto,
+            "premissas": premissas,
+            "periodo_fiscal": periodo_fiscal,
+        })
+
+        # P2 — riscos
+        _protocol_engine.avancar(case_id, 2, {
+            "riscos": riscos,
+            "dados_qualidade": "verde",
+        })
+
+        # P3 — análise IA
+        _protocol_engine.avancar(case_id, 3, {
+            "query_analise": req.query,
+            "analise_result": req.resultado_ia,
+        })
+
+        # P4 — hipótese
+        _protocol_engine.avancar(case_id, 4, {
+            "hipotese_gestor": req.hipotese_gestor,
+        })
+
+        # P5 — decisão
+        _protocol_engine.avancar(case_id, 5, {
+            "recomendacao": req.resultado_ia[:500],
+            "decisao_final": req.decisao_final,
+            "decisor": "Gestor",
+        })
+
+        # Gerar dossiê C4 (requer P5 concluído)
+        dossie = _output_engine.gerar_dossie(case_id=case_id)
+
+        # Ativar monitoramento P6
+        try:
+            ativar_monitoramento_p6(
+                case_id=case_id,
+                user_id=req.user_id,
+                titulo=titulo,
+            )
+        except Exception as e_p6:
+            logger.warning("P6 monitoring não ativado para case_id=%d: %s", case_id, e_p6)
+
+        return {
+            "sucesso": True,
+            "case_id": case_id,
+            "dossie_id": dossie.id,
+            "mensagem": "Análise registrada com Legal Hold ativo.",
+        }
+
+    except ProtocolError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except OutputError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Erro em /v1/registrar_decisao: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+
+
 # --- Protocol endpoints ---
 
 @app.post("/v1/cases", status_code=201, dependencies=[Depends(verificar_token_api)])
@@ -1150,7 +1250,7 @@ def gerar_output(req: GerarOutputRequest):
                 )
             result = _output_engine.gerar_alerta(
                 case_id=req.case_id,
-                passo=3,
+                passo=2,
                 titulo=req.titulo,
                 contexto=req.contexto,
                 materialidade=req.materialidade,

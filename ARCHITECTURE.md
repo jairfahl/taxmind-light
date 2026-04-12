@@ -1,5 +1,5 @@
 # Tribus-AI — Architecture Reference
-**Versão:** 1.0
+**Versão:** 2.2
 **Atualizado em:** Abril 2026
 **Mantido por:** PO (Jair)
 
@@ -22,63 +22,101 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 
 ```
 /Users/jairfahl/Downloads/tribus-ai-light/
-├── auth.py                   ← Autenticação JWT + bcrypt
-├── admin.py                  ← Painel admin (5 abas: Users/API/LegalHold/MAU/Onboarding)
+├── auth.py                   ← Autenticação JWT + bcrypt (usado pela API)
+├── admin.py                  ← Painel admin Streamlit (LEGADO — não modificar)
 ├── ARCHITECTURE.md           ← Este arquivo
 ├── CLAUDE.md                 ← Regras e contexto permanente para Claude Code
+├── docker-compose.yml        ← Serviços: db (5436), api (8020), ui (8521→3000)
+├── Dockerfile                ← Imagem do backend FastAPI
 ├── landing/
 │   └── index.html            ← Landing page pública (CTAs trial + WhatsApp)
-├── ui/
-│   ├── app.py                ← Entry point Streamlit + guard de sessão + onboarding
-│   └── components/
-│       ├── badge_criticidade.py      ← Badge 3 níveis: Crítico/Atenção/Informativo
-│       ├── sugestoes_proativas.py    ← Sugestões de monitoramento de temas (G25)
-│       ├── onboarding_profile.py     ← Progressive profiling 3 steps (GTM E)
-│       ├── qualificacao_fatica.py    ← Qualificação fática do Eixo 3
-│       ├── grau_consolidacao.py      ← Badge de grau de consolidação jurídica
-│       └── saidas_stakeholder.py     ← Visões por público-alvo
-├── pages/
-│   └── login.py              ← Tela de login
-├── components/
-│   └── trial_banner.py       ← Banner de trial
+├── ui/                       ← LEGADO Streamlit — não modificar, substituído por frontend/
+├── frontend/                 ← ⭐ UI ATIVA — Next.js 16 App Router
+│   ├── app/
+│   │   ├── page.tsx              ← Redirect → /analisar
+│   │   ├── globals.css           ← Tailwind v4 + tokens shadcn + UI Upgrade overrides + dark mode
+│   │   ├── (auth)/
+│   │   │   └── login/page.tsx    ← Login com split-layout (painel navy + form branco)
+│   │   ├── (app)/
+│   │   │   ├── layout.tsx        ← AuthGuard + Sidebar + hamburguer mobile + OnboardingModal
+│   │   │   ├── analisar/         ← ⭐ Análise RAG principal (URL: /analisar) — CTA primário
+│   │   │   ├── consultar/        ← Análise RAG alternativa (URL: /consultar)
+│   │   │   ├── protocolo/        ← Protocolo P1→P6 (URL: /protocolo)
+│   │   │   ├── simuladores/      ← Simuladores de carga tributária (URL: /simuladores)
+│   │   │   ├── documentos/       ← Histórico de outputs + modal de detalhes (URL: /documentos)
+│   │   │   └── base-conhecimento/ ← Upload normas + Monitor de Fontes (URL: /base-conhecimento)
+│   │   └── admin/
+│   │       └── page.tsx          ← Painel admin (ADMIN only) (URL: /admin)
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Sidebar.tsx       ← Nav dark navy (#1a2f4e) + logo + avatar com iniciais
+│   │   │   ├── AuthGuard.tsx     ← Redirect não-autenticados
+│   │   │   ├── AdminGuard.tsx    ← Redirect não-ADMIN
+│   │   │   └── OnboardingModal.tsx ← Progressive profiling step 0
+│   │   ├── shared/
+│   │   │   ├── Card.tsx          ← shadow-card + hover lift opcional (prop clickable)
+│   │   │   ├── BadgeCriticidade.tsx ← px-4 py-1.5 + shadow colorida por nível
+│   │   │   ├── PainelGovernanca.tsx ← Shield header + metric cards coloridos
+│   │   │   └── AnalysisLoading.tsx  ← Spinner SVG marca + mensagens rotativas 3s
+│   │   └── ui/                   ← shadcn/ui v2 (button, input, textarea, select…)
+│   ├── lib/
+│   │   ├── api.ts                ← axios instance com interceptors auth + x-api-key
+│   │   └── utils.ts
+│   ├── store/
+│   │   └── auth.ts               ← Zustand store (user, token, logout) + localStorage persist
+│   ├── src/styles/tokens.css     ← Design tokens — fonte de verdade para cores/tipografia
+│   ├── types/index.ts            ← Tipos TypeScript globais
+│   ├── public/logo.png           ← TrisbusAI_Logo_Dark_v1.png (dark — adequado para sidebar navy e login)
+│   ├── next.config.ts            ← output: standalone + outputFileTracingRoot
+│   └── Dockerfile                ← Multi-stage build (node:20-alpine)
 ├── src/
 │   ├── api/
-│   │   └── main.py           ← FastAPI — 19+ endpoints
+│   │   ├── main.py               ← FastAPI — 40+ endpoints REST
+│   │   └── auth_api.py           ← Dependency verificar_token_api (X-Api-Key)
 │   ├── cognitive/
-│   │   ├── engine.py         ← Orquestração cognitiva principal
-│   │   ├── criticidade.py    ← Classificação de criticidade 3 níveis (G17)
-│   │   ├── proatividade.py   ← Detecção de padrões + sugestões de monitoramento (G25)
-│   │   ├── monitoramento_p6.py ← Ciclo pós-decisão P6 + verificação de premissas
-│   │   └── aprendizado_institucional.py ← Extração de heurísticas de casos (G24)
+│   │   ├── engine.py             ← Orquestração cognitiva principal
+│   │   ├── criticidade.py        ← Classificação de criticidade 3 níveis (G17)
+│   │   ├── proatividade.py       ← Detecção de padrões + sugestões (G25)
+│   │   ├── monitoramento_p6.py   ← Ciclo pós-decisão P6
+│   │   └── aprendizado_institucional.py ← Extração de heurísticas (G24)
 │   ├── rag/
-│   │   ├── retriever.py      ← Retrieval pgvector + adaptive tool chain
-│   │   ├── hyde.py           ← HyDE — RDM-020
-│   │   ├── multi_query.py    ← Multi-Query — RDM-024
-│   │   ├── step_back.py      ← Step-Back — RDM-025
-│   │   ├── corrector.py      ← CRAG
-│   │   ├── adaptive.py       ← Adaptive retrieval chain
-│   │   ├── ptf.py            ← PTF (Pre-retrieval Transformation)
-│   │   ├── spd.py            ← SPD routing
-│   │   ├── decomposer.py     ← Decomposição de queries
-│   │   └── remissao_resolver.py ← RAR — Resolução Automática de Remissões
+│   │   ├── retriever.py, hyde.py, multi_query.py, step_back.py
+│   │   ├── corrector.py, adaptive.py, ptf.py, spd.py
+│   │   ├── decomposer.py, remissao_resolver.py
+│   │   └── vigencia_checker.py
 │   ├── billing/
-│   │   ├── access.py         ← Controle de acesso por billing/trial
-│   │   └── mau_tracker.py    ← Monthly Active Users — metering por análise (G26)
+│   │   ├── access.py, mau_tracker.py
 │   ├── integrity/
-│   │   └── lockfile_manager.py ← Prompt Integrity — RDM-029
-│   ├── outputs/              ← 5 classes de output acionável + legal_hold.py
-│   ├── protocol/             ← Engine P1→P6
-│   ├── quality/              ← Quality gate
-│   ├── observability/        ← Métricas + drift + regression
-│   ├── monitor/              ← Monitor de fontes oficiais
-│   ├── ingest/               ← Pipeline de ingestão de PDFs
+│   │   └── lockfile_manager.py
+│   ├── outputs/                  ← 5 classes de output + legal_hold.py + stakeholder_decomposer.py
+│   ├── protocol/                 ← Engine P1→P6
+│   ├── quality/                  ← Quality gate
+│   ├── observability/            ← Métricas + drift + regression
+│   ├── monitor/                  ← Monitor DOU/Planalto/CGIBS/NF-e/RFB/SIJUT2
+│   │   ├── checker.py            ← verificar_todas_fontes, listar_pendentes
+│   │   └── sources.py            ← Scrapers por tipo (6 checkers)
+│   ├── ingest/                   ← Pipeline de ingestão assíncrona + dedup por file_hash
 │   └── db/
-│       └── pool.py           ← ThreadedConnectionPool — get_conn/put_conn (USAR SEMPRE)
+│       └── pool.py               ← ThreadedConnectionPool — get_conn/put_conn (USAR SEMPRE)
 ├── migrations/
-│   └── NNN_descricao.sql     ← Numeração sequencial obrigatória (última: 117)
+│   └── NNN_descricao.sql         ← Numeração sequencial obrigatória (última: 117)
 └── tests/
-    ├── unit/                 ← test_[modulo].py
-    └── integration/          ← test_[fluxo].py
+    ├── unit/                     ← test_[modulo].py + conftest.py (autouse mocks)
+    ├── integration/              ← test_[fluxo].py + conftest.py (bypass_internal_auth)
+    │   ├── conftest.py           ← fixtures: test_client, user_token, admin_token, bypass_internal_auth
+    │   ├── test_auth_endpoints.py       ← TC-AUTH-01..08
+    │   ├── test_analyze_endpoint.py     ← TC-ANALYZE-01..08 (LLM mockado)
+    │   ├── test_simuladores_endpoints.py ← TC-SIM-01..07
+    │   ├── test_protocol_endpoints.py   ← TC-PROT-01..11
+    │   ├── test_multi_tenant_isolation.py ← TC-MT-01..05
+    │   ├── test_observability_api_new.py ← TC-OBS-01..04
+    │   ├── test_admin_monitor.py        ← TC-ADMIN-01, TC-MON-02..03
+    │   ├── test_db_integrity.py         ← TC-DB-01..05 (constraints + HNSW)
+    │   ├── test_api.py                  ← testes de integração gerais
+    │   ├── test_outputs_api.py          ← testes de outputs C1..C5
+    │   └── test_protocol_api.py         ← testes do protocolo P1→P6
+    ├── adversarial/              ← testes adversariais Sprint 3
+    └── e2e/                      ← testes E2E (rodam manualmente)
 ```
 
 ---
@@ -87,21 +125,27 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 
 | Camada | Tecnologia |
 |---|---|
-| Linguagem | Python 3.12 |
-| API Backend | FastAPI (porta 8020) |
-| Frontend | Streamlit (porta 8501) |
+| Linguagem backend | Python 3.12 |
+| API Backend | FastAPI (porta 8020 local / 8020 Docker) |
+| Frontend | **Next.js 16 App Router** (porta 3000 dev / 8521 Docker) |
+| Estado do cliente | Zustand + localStorage |
+| HTTP client | axios com interceptors (lib/api.ts) |
+| UI Components | shadcn/ui v2, Tailwind v4 (config CSS-only) |
 | Banco | PostgreSQL 16 + pgvector (HNSW, dim 1024) |
 | Embeddings | Voyage-3 |
 | LLM | Claude Sonnet 4.6 |
-| Infraestrutura | Docker |
+| Rate limiting | slowapi 0.1.9 + limits 3.6.0 |
+| Infraestrutura | Docker Compose (3 serviços: db, api, ui) |
 | Container DB | tribus-ai-db |
-| DATABASE_URL | postgresql://taxmind:taxmind123@localhost:5436/taxmind_db |
+| DATABASE_URL local | postgresql://taxmind:taxmind123@localhost:5436/taxmind_db |
+| DATABASE_URL Docker | postgresql://taxmind:taxmind123@db:5432/taxmind_db |
 
 **Tecnologias EXPLICITAMENTE EXCLUÍDAS (nunca usar):**
-- LangChain
+- LangChain / LlamaIndex
 - LangGraph
 - Supabase
 - ChromaDB / FAISS / Pinecone
+- Streamlit (legado — não adicionar novas features)
 
 ---
 
@@ -109,26 +153,27 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 
 | Módulo | Responsabilidade | O que NÃO faz |
 |---|---|---|
-| `ui/app.py` | Entry point Streamlit, guard de sessão, onboarding, roteamento de abas | Zero lógica tributária, zero chamadas diretas ao banco |
+| `frontend/app/(app)/` | Páginas da aplicação autenticada — consultar, protocolo, simuladores, documentos, base-conhecimento | Zero lógica tributária, zero chamadas diretas ao banco |
+| `frontend/app/(auth)/login/` | Tela de login — chama `/v1/auth/login`, salva token no Zustand | Zero lógica de negócio |
+| `frontend/components/layout/AuthGuard.tsx` | Redireciona não-autenticados para /login | Zero rendering de conteúdo |
+| `frontend/lib/api.ts` | Instância axios com `Authorization: Bearer` + `X-Api-Key` em todos os requests | Zero lógica de domínio |
+| `frontend/store/auth.ts` | Estado global de auth (user, token) com persistência localStorage | Zero chamadas diretas à API |
+| `src/api/main.py` | 40+ endpoints REST, validação, serialização, rate limiting (slowapi) | Zero lógica de domínio — delega ao engine |
+| `src/api/auth_api.py` | Dependency `verificar_token_api` — valida `X-Api-Key` em todos os endpoints protegidos | Zero lógica tributária |
 | `src/cognitive/engine.py` | Orquestração do pipeline cognitivo completo | Zero renderização UI |
 | `src/rag/retriever.py` | Retrieval HNSW, adaptive tool chain, PTF | Zero lógica de negócio tributária |
 | `auth.py` | JWT, bcrypt, autenticação, busca de usuário | Zero renderização UI |
-| `admin.py` | Renderização do painel admin (5 abas) | Zero lógica de negócio — delega a auth.py e queries diretas |
 | `src/cognitive/criticidade.py` | Classifica Crítico/Atenção/Informativo por termos detectados | Zero renderização |
 | `src/cognitive/proatividade.py` | Detecta padrões de tags e gera sugestões de monitoramento | Zero rendering |
 | `src/cognitive/monitoramento_p6.py` | Ativa/encerra monitoramento P6, verifica premissas | Zero rendering |
 | `src/cognitive/aprendizado_institucional.py` | Extrai heurísticas de casos encerrados, expira com 6 meses | Zero rendering |
 | `src/billing/mau_tracker.py` | Registra e consulta MAU por análise realizada (DEC-08) | Zero lógica tributária |
 | `src/outputs/legal_hold.py` | Ativa/desativa/verifica Legal Hold em outputs e interações | Zero rendering |
+| `src/monitor/checker.py` | verificar_todas_fontes (concurrent, 30s timeout/fonte), listar_pendentes, atualizar_status | Zero rendering |
+| `src/monitor/sources.py` | Scrapers por tipo: dou, planalto, cgibs, nfe, rfb, sijut2 | Zero persistência |
 | `src/rag/remissao_resolver.py` | Resolve remissões entre normas e injeta no contexto (RAR) | Zero orquestração |
 | `src/db/pool.py` | Pool de conexões psycopg2 — get_conn/put_conn | Zero lógica de negócio |
-| `ui/components/onboarding_profile.py` | Progressive profiling 3 steps, persiste em users | Zero lógica tributária |
-| `src/rag/hyde.py` | HyDE — geração de hipótese para expand de query | Zero orquestração |
-| `src/rag/multi_query.py` | Multi-Query — variações paralelas da query | Zero orquestração |
-| `src/rag/step_back.py` | Step-Back — query mais abstrata | Zero orquestração |
-| `src/rag/corrector.py` | CRAG — verificação e correção do retrieval | Zero orquestração |
 | `src/integrity/lockfile_manager.py` | Verificação de integridade de prompts (RDM-029) | Zero lógica tributária |
-| `src/api/main.py` | Endpoints REST, validação de requests, serialização | Zero lógica de domínio — delega ao engine |
 
 ---
 
@@ -187,9 +232,9 @@ Flag `_tool_activated` em `engine.py` controla isso. Nunca remover essa flag.
 
 ### Gate de Qualidade
 - **RDMs da Onda 1.5 estão implementados** (HyDE, Multi-Query, Step-Back, Context Budget, Lockfile). Não reimplementar.
-- **597 testes devem passar** após qualquer modificação (referência pós GTM E, Abril 2026).
-  - Comando: `pytest tests/ -v --tb=short`
-  - 29 falhas pré-existentes DB são conhecidas e aceitáveis (requerem banco ativo)
+- **647 testes devem passar, 0 falhas** após qualquer modificação (referência pós Sprint T1/T2 QA, Abril 2026).
+  - Comando: `.venv/bin/python -m pytest tests/unit/ tests/integration/ -v --tb=short`
+  - Zero falhas toleradas — o baseline está limpo desde Abril 2026
 
 ---
 
@@ -237,6 +282,35 @@ Se a implementação exigir tocar arquivo fora do escopo declarado: **parar e re
 | Onboarding progressive profiling | ✅ Implementado | 3 steps: step 0 obrigatório, 1-2 opcionais — GTM E, migration 117 |
 | Landing page WhatsApp CTA | ✅ Implementado | Botão WhatsApp em hero + CTA final + footer — GTM A/DEC-11 |
 | Badge "Memória de Decisão" | ✅ Implementado | Label no card do Dossiê na aba Documentos — GTM D |
+| Migração UI Streamlit → Next.js 16 | ✅ Implementado | App Router, Tailwind v4, shadcn/ui v2, Zustand, axios — P01–P20 |
+| SEC-01 CORS restrito | ✅ Implementado | allow_origins apenas tribus-ai.com.br + localhost:8521 + localhost:3000 |
+| SEC-02 JWT_SECRET sem fallback | ✅ Implementado | RuntimeError se env não configurada |
+| SEC-05 str(e) genérico | ✅ Implementado | 31 instâncias → "Erro interno. Tente novamente." |
+| SEC-06 Rate limiting slowapi | ✅ Implementado | /v1/analyze: 20/min, /upload: 10/min, demais: 60/min |
+| SEC-07 MIME validation upload | ✅ Implementado | magic bytes + limite 50MB server-side |
+| SEC-08 X-Api-Key em todos os endpoints | ✅ Implementado | Dependency verificar_token_api em auth_api.py |
+| Monitor de Fontes Oficiais no frontend | ✅ Implementado | Verificar agora + docs pendentes + descartar — página base-conhecimento |
+| Modal de detalhes na aba Documentos | ✅ Implementado | Conteúdo completo + stakeholders + materialidade + disclaimer |
+| Mensagem amigável fora-de-escopo | ✅ Implementado | HTTP 400 → card âmbar com sugestão de consulta correta |
+| ISS-05: Monitor com timeout por fonte | ✅ Implementado | ThreadPoolExecutor + 30s por fonte — evita que DOU/PGFN offline trave endpoint inteiro |
+| ISS-06: max_tokens stakeholders 800→1200 | ✅ Implementado | Evita truncamento de stakeholders em queries complexas |
+| ISS-16: Filtro/busca em Documentos | ✅ Implementado | useMemo filtrando por título, classe, conteúdo — documentos/page.tsx |
+| ISS-18: Alertas drift em P6 | ✅ Implementado | P6Monitoramento.tsx busca /v1/observability/drift e exibe alertas ativos |
+| ISS-20: Data de revisão em guias.ts | ✅ Implementado | ULTIMA_REVISAO = "Abril 2026" exportado do módulo guias.ts |
+| Bug: gerar_alerta passo=3→2 | ✅ Corrigido | Engine só aceita passo in (2, 6) — main.py corrigido + 3 arquivos de teste |
+| Bug: criar_caso sem premissas/periodo_fiscal | ✅ Corrigido | Adicionados parâmetros opcionais em protocol/engine.py |
+| Bug: mock psycopg2.connect em vez de get_conn | ✅ Corrigido | test_spd.py, test_stakeholders.py, test_carimbo.py — mockar na camada do pool |
+| Sprint T1/T2 QA — suite limpa | ✅ Implementado | 647 testes passando, 0 falhas — 8 novos arquivos de integração (Abril 2026) |
+| UI Upgrade — Sidebar dark navy | ✅ Implementado | bg #1a2f4e, texto branco, active item gradient + borda 3px accent-vivid, avatar com iniciais |
+| UI Upgrade — globals.css tokens | ✅ Implementado | --shadow-card, --gradient-primary, --color-accent-vivid, --color-bg-sidebar override, dark mode CSS media query |
+| UI Upgrade — Login split-layout | ✅ Implementado | Painel esquerdo navy (desktop) + bullets de valor + form branco direita; mobile single-column |
+| UI Upgrade — AnalysisLoading spinner | ✅ Implementado | SVG spinner marca + mensagens rotativas a cada 3s ("Consultando LC 214/2025…" etc.) |
+| UI Upgrade — PainelGovernança Shield | ✅ Implementado | Header com ícone Shield, cada métrica em card colorido (verde/âmbar/vermelho por valor) |
+| UI Upgrade — BadgeCriticidade polished | ✅ Implementado | px-4 py-1.5, icon size=16, font-bold, shadow colorida por criticidade |
+| UI Upgrade — Card sombra + hover lift | ✅ Implementado | shadow-card em todos os cards; prop clickable ativa hover:-translate-y-0.5 |
+| UI Upgrade — Botão primário gradiente | ✅ Implementado | bg-primary → gradient-primary + scale on hover/active via CSS @layer components |
+| UI Upgrade — Layout mobile hamburguer | ✅ Implementado | Sidebar deslizante + overlay + botão hamburguer no topo em mobile; fecha ao navegar |
+| Logo dark (TrisbusAI_Logo_Dark_v1) | ✅ Implementado | Substituiu public/logo.png — adequado para sidebar navy e painel login escuro |
 
 ---
 

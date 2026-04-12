@@ -11,7 +11,7 @@ import { useAuthStore } from "@/store/auth";
 import type { ResultadoAnalise, Criticidade } from "@/types";
 
 export function P3Analise() {
-  const { caseId, query, premissas, riscos, resultadoIA, set, setStep } = useProtocoloStore();
+  const { caseId, query, premissas, riscos, topK, resultadoIA, set, setStep } = useProtocoloStore();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
@@ -23,6 +23,7 @@ export function P3Analise() {
     try {
       const res = await api.post<ResultadoAnalise>("/v1/analyze", {
         query,
+        top_k: topK,
         premissas,
         riscos_fiscais: riscos,
         user_id: user?.id ?? null,

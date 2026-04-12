@@ -93,13 +93,13 @@ export function P2Estruturacao() {
   };
 
   return (
-    <Card titulo="P2 — Estruturação">
+    <Card titulo="P2 — O que é verdade e o que te preocupa?">
       <div className="space-y-5">
         {/* Premissas */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Premissas regulatórias
+              O que é verdade na sua situação?
             </p>
             <span className={`text-xs font-semibold ${premissas.length >= MIN ? "text-emerald-600" : "text-red-500"}`}>
               {premissas.length}/{MIN} mínimo
@@ -119,7 +119,7 @@ export function P2Estruturacao() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Riscos fiscais identificados
+              O que você teme que aconteça?
             </p>
             <span className={`text-xs font-semibold ${riscos.length >= MIN ? "text-emerald-600" : "text-red-500"}`}>
               {riscos.length}/{MIN} mínimo

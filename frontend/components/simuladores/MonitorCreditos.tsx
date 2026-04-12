@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, X } from "lucide-react";
 import api from "@/lib/api";
+import { GuiaSimulador } from "./GuiaSimulador";
+import { GUIA_CREDITOS } from "./guias";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -84,6 +86,7 @@ export function MonitorCreditos() {
           </Button>
         </div>
         {erro && <p className="text-xs text-red-600 mt-2">{erro}</p>}
+        <GuiaSimulador {...GUIA_CREDITOS} />
       </Card>
 
       {resultado && (

@@ -93,18 +93,20 @@ def test_ingest_upload_pdf_valido():
         files={"file": ("manual_teste.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
         data={"nome": "Manual Teste Sprint2", "tipo": "Manual"},
     )
-    assert resp.status_code == 200, f"Upload falhou: {resp.text[:300]}"
+    assert resp.status_code == 202 or resp.status_code == 200, f"Upload falhou: {resp.text[:300]}"
     data = resp.json()
-    assert data["chunks"] > 0
-    assert "norma_id" in data
-    assert data["nome"] == "Manual Teste Sprint2"
+    # API agora é assíncrona: retorna job_id + status PENDING
+    assert "job_id" in data
+    assert data["status"] in ("PENDING", "pending")
 
 
 def test_ingest_upload_arquivo_nao_pdf():
+    # API aceita vários formatos além de PDF (.txt, .docx, etc.)
+    # Arquivo com extensão não suportada → 400
     resp = client.post(
         "/v1/ingest/upload",
-        files={"file": ("doc.txt", b"conteudo texto", "text/plain")},
-        data={"nome": "Teste TXT", "tipo": "Outro"},
+        files={"file": ("doc.exe", b"MZ\x90\x00", "application/octet-stream")},
+        data={"nome": "Teste EXE", "tipo": "Outro"},
     )
     assert resp.status_code == 400
 

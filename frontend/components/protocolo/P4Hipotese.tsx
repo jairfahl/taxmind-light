@@ -34,7 +34,7 @@ export function P4Hipotese() {
   return (
     <div className="space-y-4">
       {/* Campo de hipótese */}
-      <Card titulo="P4 — Hipótese do Gestor">
+      <Card titulo="P4 — Qual era seu palpite?">
         <p className="text-sm text-muted-foreground mb-3">
           Registre sua leitura da situação <strong>antes</strong> de comparar com a análise da IA.
           Este campo é obrigatório e compõe o registro auditável da decisão.
@@ -42,7 +42,7 @@ export function P4Hipotese() {
         <Textarea
           value={hipoteseGestor}
           onChange={(e) => { set({ hipoteseGestor: e.target.value }); setSalvo(false); }}
-          placeholder="Minha leitura sobre o impacto desta questão tributária no negócio é…"
+          placeholder="Registre aqui sua leitura inicial. Isso preserva seu raciocínio independente."
           className="min-h-28 resize-none text-sm bg-input border-border"
           disabled={salvo}
         />

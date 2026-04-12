@@ -9,6 +9,7 @@ interface ProtocoloState {
   // P1
   query: string;
   metodos: string[];
+  topK: number;
   // P2
   premissas: string[];
   riscos: string[];
@@ -35,6 +36,7 @@ const INITIAL: Omit<ProtocoloState, "setStep" | "set" | "reset"> = {
   interactionId: null,
   query: "",
   metodos: [],
+  topK: 5,
   premissas: [],
   riscos: [],
   resultadoIA: null,

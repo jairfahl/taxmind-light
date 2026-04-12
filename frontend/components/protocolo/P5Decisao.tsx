@@ -84,7 +84,7 @@ export function P5Decisao() {
 
   return (
     <div className="space-y-4">
-      <Card titulo="P5 — Decisão Final">
+      <Card titulo="P5 — O que você vai fazer?">
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Registre a decisão tomada. O sistema calculará a similaridade com a análise da IA
@@ -93,7 +93,7 @@ export function P5Decisao() {
           <Textarea
             value={decisaoFinal}
             onChange={(e) => { set({ decisaoFinal: e.target.value }); setCarimbo(null); setConcluido(false); }}
-            placeholder="A decisão adotada é…"
+            placeholder="Descreva o que você decidiu fazer com base nesta análise..."
             className="min-h-24 resize-none text-sm bg-input border-border"
             disabled={concluido}
           />

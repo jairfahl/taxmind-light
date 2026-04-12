@@ -81,14 +81,14 @@ def test_gerar_alerta_disclaimer_presente(mock_load, mock_get_conn):
     mock_conn, _ = _make_db_mocks(1)
     mock_get_conn.return_value = mock_conn
     mock_load.return_value = OutputResult(
-        id=1, case_id=10, passo_origem=3, classe=OutputClass.ALERTA,
+        id=1, case_id=10, passo_origem=2, classe=OutputClass.ALERTA,
         status=OutputStatus.GERADO, titulo="Alerta teste",
         conteudo={}, materialidade=3, disclaimer=DISCLAIMER_PADRAO,
         versao_prompt=None, versao_base=None,
     )
     engine = OutputEngine()
     result = engine.gerar_alerta(
-        case_id=10, passo=3, titulo="Alerta teste",
+        case_id=10, passo=2, titulo="Alerta teste",
         contexto="contexto fiscal", materialidade=3,
     )
     assert result.disclaimer == DISCLAIMER_PADRAO
@@ -140,7 +140,7 @@ def test_dossie_bloqueado_sem_p7(mock_get_conn):
     mock_get_conn.return_value = mock_conn
 
     engine = OutputEngine()
-    with pytest.raises(OutputError, match="P7"):
+    with pytest.raises(OutputError, match="P5"):  # P7 não existe; protocolo tem 6 passos (requer P5)
         engine.gerar_dossie(case_id=99)
 
 

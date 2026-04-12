@@ -168,7 +168,7 @@ def gerar_resumos_stakeholders(
             prompt = _gerar_prompt_stakeholder(st_id, analise_original)
             response = client.messages.create(
                 model=model,
-                max_tokens=400,
+                max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             texto = response.content[0].text.strip()

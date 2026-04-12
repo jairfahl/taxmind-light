@@ -9,7 +9,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated || user?.perfil !== "ADMIN") {
-      router.push("/consultar");
+      router.push("/analisar");
     }
   }, [isAuthenticated, user, router]);
 

@@ -1,5 +1,5 @@
 # Tribus-AI — Instruções para Claude Code
-**Versão:** 2.0 | **Atualizado em:** Abril 2026
+**Versão:** 2.1 | **Atualizado em:** Abril 2026
 
 > Este arquivo é lido automaticamente pelo Claude Code a cada sessão.
 > Não remover. Atualizar sempre que houver decisões arquiteturais novas.
@@ -30,12 +30,13 @@ Só prosseguir após concluir os 3 passos acima.
 
 - **Produto:** Tribus-AI — RAG de inteligência tributária (Reforma Tributária brasileira)
 - **Raiz:** `/Users/jairfahl/Downloads/tribus-ai-light/`
-- **Entry point UI:** `ui/app.py` (Streamlit, porta 8501)
+- **Entry point UI:** `frontend/` (Next.js 16 App Router, porta 3000 dev / 8521 Docker)
 - **Entry point API:** `src/api/main.py` (FastAPI, porta 8020)
 - **Banco:** `postgresql://taxmind:taxmind123@localhost:5436/taxmind_db`
 - **Container DB:** `tribus-ai-db`
 - **PDFs das normas:** `/Users/jairfahl/Downloads/taxmind/Docs/Arquivos Upload/` — **read-only, NUNCA copiar**
 - **Specs (.docx):** `/Users/jairfahl/Downloads/taxmind/Specs/`
+- **ATENÇÃO:** Streamlit (`ui/app.py`) foi **substituído** pelo Next.js. Não modificar `ui/app.py`.
 
 ---
 
@@ -64,11 +65,30 @@ Só prosseguir após concluir os 3 passos acima.
 
 | O que usar | O que NUNCA usar |
 |---|---|
-| Python 3.12, FastAPI, Streamlit | LangChain / LlamaIndex |
-| PostgreSQL 16 + pgvector (HNSW, dim 1024) | LangGraph |
-| Voyage-3 (embeddings) | Supabase |
-| Claude Sonnet 4.6 (LLM padrão) | ChromaDB / FAISS / Pinecone |
-| Docker, psycopg2 direto | Qualquer ORM |
+| Python 3.12, FastAPI | LangChain / LlamaIndex |
+| Next.js 16 App Router, React, Tailwind v4, shadcn/ui v2 | LangGraph |
+| PostgreSQL 16 + pgvector (HNSW, dim 1024) | Supabase |
+| Voyage-3 (embeddings) | ChromaDB / FAISS / Pinecone |
+| Claude Sonnet 4.6 (LLM padrão) | Qualquer ORM |
+| Docker, psycopg2 direto, Zustand, axios | Streamlit (legado) |
+
+### Convenções Next.js (OBRIGATÓRIO ler antes de tocar o frontend)
+- **App Router:** grupos `(app)` e `(auth)` — o prefixo do grupo NÃO aparece na URL
+- **Tailwind v4:** config via CSS (`@theme inline`), sem `tailwind.config.ts`
+- **NEXT_PUBLIC_*** são gravadas no build — override de env em runtime não funciona
+- **API calls:** sempre via `@/lib/api` (axios com interceptors de `Authorization` e `X-Api-Key`)
+- **Auth:** `useAuthStore` (Zustand + localStorage persist) — nunca acessar DB no cliente
+- **Standalone output:** `outputFileTracingRoot: path.join(__dirname)` obrigatório em `next.config.ts`
+
+### Convenções de Design (OBRIGATÓRIO)
+- **Tokens:** `frontend/src/styles/tokens.css` é a fonte de verdade para cores e tipografia
+- **Overrides shadcn/globais:** `frontend/app/globals.css` (`:root` block) — não editar tokens.css para ajustes visuais de UI
+- **Variáveis de sombra/gradiente:** `--shadow-card`, `--shadow-card-hover`, `--gradient-primary` definidas em `globals.css`
+- **Sidebar:** dark navy `#1a2f4e` — via `--color-bg-sidebar` em `globals.css`. Texto sempre branco/rgba
+- **Dark mode:** `@media (prefers-color-scheme: dark)` em `globals.css` — sem biblioteca JS, sem `next-themes`
+- **Logo:** `public/logo.png` = `TrisbusAI_Logo_Dark_v1.png` — adequado para fundos escuros e claros
+- **Card.tsx:** prop `clickable` ativa hover lift; sem prop = apenas sombra estática
+- **AnalysisLoading:** componente `"use client"` — depende de `useEffect` para mensagens rotativas
 
 ---
 
@@ -173,12 +193,35 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 | GTM A — WhatsApp CTA na landing page (DEC-11) | ✅ |
 | GTM D — Badge "Memória de Decisão" na UI do Dossiê | ✅ |
 | GTM E — Qualificação de tenant via progressive profiling (3 steps) | ✅ |
+| **Migração UI: Streamlit → Next.js 16 (P01–P20)** | ✅ |
+| **Segurança — SEC-01 CORS, SEC-02 JWT sem fallback** | ✅ |
+| **Segurança — SEC-05 str(e) genérico, SEC-06 slowapi rate limit** | ✅ |
+| **Segurança — SEC-07 MIME validation upload, SEC-08 X-Api-Key endpoints** | ✅ |
+| **Frontend — Página Base de Normas (upload + monitor de fontes)** | ✅ |
+| **Frontend — Modal de detalhes na aba Documentos** | ✅ |
+| **Frontend — Mensagem amigável para consultas fora do escopo** | ✅ |
+| **Plano de Testes QA — Sprint T1+T2 (integração + DB + isolamento)** | ✅ |
+| **Correções de bugs — passo=3→2 alerta, P7→P5, criar_caso premissas, mocks get_conn** | ✅ |
+| **Segurança — ISS-05 timeout por fonte no monitor, ISS-06 max_tokens=1200 stakeholders** | ✅ |
+| **Frontend — Filtro/busca na página Documentos (ISS-16)** | ✅ |
+| **Frontend — P6 exibe alertas de monitoramento ativos (ISS-18)** | ✅ |
+| **Frontend — Data de revisão em guias.ts (ISS-20)** | ✅ |
+| **UI Upgrade — Sidebar dark navy + tokens CSS + dark mode** | ✅ |
+| **UI Upgrade — Login split-layout + AnalysisLoading spinner** | ✅ |
+| **UI Upgrade — PainelGovernança Shield + BadgeCriticidade + Card sombra** | ✅ |
+| **UI Upgrade — Botão gradiente + inputs focus accent + slider** | ✅ |
+| **UI Upgrade — Layout mobile hamburguer + Logo dark v1** | ✅ |
 | **Gate U2** | ⏳ Pendente |
 | **Deploy VPS Hostinger** | ⏳ Pendente |
+| **SEC-09 BYPASS_AUTH=False** | ⏳ Pendente (fazer após validar SEC-08) |
+| **SEC-10 IDs sequenciais → UUID (cases/outputs)** | ⏳ Pendente (requer migration + backup) |
 
-- **Suite de testes:** 597 passando, 29 falhas pré-existentes DB (referência pós GTM E)
+- **Suite de testes backend:** 647 passando, 0 falhas (referência pós Sprint-T1/T2 QA — Abril 2026)
+- **Novos testes de integração:** test_auth_endpoints, test_simuladores_endpoints, test_protocol_endpoints, test_analyze_endpoint, test_multi_tenant_isolation, test_observability_api_new, test_admin_monitor, test_db_integrity
 - **Última migration:** `117_onboarding_profile.sql`
 - **Domínios registrados:** tribus-ai.com.br / tribus-ia.com.br
+- **slowapi:** instalado manualmente no container (`pip install slowapi==0.1.9 limits==3.6.0`) — adicionar ao Dockerfile do backend para persistir
+- **VOYAGE_API_KEY ativa:** `pa-GA8lfUZKLFS_9Xv3Xoh01cPJdKqsagDAivrqcJ5jsPG`
 
 ---
 

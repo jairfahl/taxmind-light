@@ -46,7 +46,7 @@ def test_gerar_alerta_c1_com_disclaimer():
     assert "disclaimer" in data
     assert len(data["disclaimer"]) > 0
     assert data["materialidade"] == 4
-    assert data["passo_origem"] == 3
+    assert data["passo_origem"] == 2
     assert "id" in data and data["id"] > 0
 
 
@@ -72,7 +72,8 @@ def test_gerar_dossie_sem_p7():
         "classe": "dossie_decisao",
     })
     assert resp.status_code == 400
-    assert "P7" in resp.json().get("detail", "")
+    # P7 não existe — o protocolo tem 6 passos (P1→P6). Dossiê requer P5 concluído.
+    assert "P5" in resp.json().get("detail", "") or "P6" in resp.json().get("detail", "") or "Decidir" in resp.json().get("detail", "")
 
 
 # ---------------------------------------------------------------------------

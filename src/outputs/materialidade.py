@@ -8,6 +8,7 @@ Score 1–5 calculado via LLM (temperatura 0.0) com base no contexto do caso.
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 import anthropic
@@ -59,6 +60,19 @@ class MaterialidadeResult:
     justificativa: str
 
 
+def _parse_json_safe(raw: str) -> dict:
+    """Extrai JSON do texto do LLM, tolerante a markdown fences e texto extra."""
+    # Tenta extrair bloco de código markdown
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+    if fence:
+        return json.loads(fence.group(1))
+    # Tenta extrair primeiro objeto JSON no texto
+    obj = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
+    if obj:
+        return json.loads(obj.group(0))
+    return json.loads(raw)
+
+
 class MaterialidadeCalculator:
 
     def __init__(self, model: str = MODEL_DEV):
@@ -85,19 +99,13 @@ class MaterialidadeCalculator:
             client = self._get_client()
             msg = client.messages.create(
                 model=self._model,
-                max_tokens=256,
+                max_tokens=512,
                 temperature=0.0,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = msg.content[0].text.strip()
-            # Extrair JSON — tolerante a markdown code fences
-            if "```" in raw:
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            parsed = json.loads(raw)
-            score = int(parsed["score"])
-            score = max(1, min(5, score))
+            parsed = _parse_json_safe(raw)
+            score = max(1, min(5, int(parsed["score"])))
             logger.info("Materialidade calculada: score=%d justificativa=%s",
                         score, parsed.get("justificativa", "")[:80])
             return score
@@ -114,16 +122,12 @@ class MaterialidadeCalculator:
             client = self._get_client()
             msg = client.messages.create(
                 model=self._model,
-                max_tokens=256,
+                max_tokens=512,
                 temperature=0.0,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = msg.content[0].text.strip()
-            if "```" in raw:
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            parsed = json.loads(raw)
+            parsed = _parse_json_safe(raw)
             score = max(1, min(5, int(parsed["score"])))
             return MaterialidadeResult(
                 score=score,

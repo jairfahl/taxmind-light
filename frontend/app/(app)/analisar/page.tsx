@@ -7,12 +7,13 @@ import { Card } from "@/components/shared/Card";
 import { BadgeCriticidade } from "@/components/shared/BadgeCriticidade";
 import { PainelGovernanca } from "@/components/shared/PainelGovernanca";
 import { AnalysisLoading } from "@/components/shared/AnalysisLoading";
+import { CTADocumentar } from "@/components/analisar/CTADocumentar";
 import api from "@/lib/api";
 import axios from "axios";
 import { useAuthStore } from "@/store/auth";
 import type { ResultadoAnalise } from "@/types";
 
-export default function ConsultarPage() {
+export default function AnalisarPage() {
   const { user } = useAuthStore();
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(5);
@@ -45,24 +46,27 @@ export default function ConsultarPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Cabeçalho */}
       <div>
-        <h1 className="text-2xl font-semibold">Consultar</h1>
+        <h1 className="text-2xl font-semibold">Analisar</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Análise livre fundamentada na base legislativa da Reforma Tributária.
+          Fundamentação legislativa da Reforma Tributária em segundos.
         </p>
       </div>
 
-      {/* Input */}
+      {/* Campo de consulta */}
       <Card>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Qual é sua dúvida tributária?
+        </label>
         <Textarea
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) analisar();
           }}
-          placeholder="Descreva sua consulta tributária… (Cmd+Enter para analisar)"
-          className="min-h-32 bg-input border-border resize-none text-sm"
+          placeholder="Descreva sua situação em linguagem natural. Ex: Somos um supermercado no Lucro Real. Como fica nossa carga de IBS/CBS a partir de 2027?"
+          className="mt-2 min-h-32 bg-input border-border resize-none text-sm"
         />
         {/* Slider top_k */}
         <div className="mt-4 pt-4 border-t border-border">
@@ -88,7 +92,11 @@ export default function ConsultarPage() {
         </div>
 
         <div className="flex justify-between items-center mt-3">
-          <p className="text-xs text-muted-foreground">{query.length} caracteres</p>
+          <p className="text-xs text-muted-foreground">
+            {query.length > 0
+              ? `${query.length} caracteres · Cmd+Enter para analisar`
+              : "Cmd+Enter para analisar"}
+          </p>
           <Button
             onClick={analisar}
             disabled={loading || !query.trim()}
@@ -103,7 +111,7 @@ export default function ConsultarPage() {
       {/* Loading */}
       {loading && <AnalysisLoading />}
 
-      {/* Erro */}
+      {/* Erro fora de escopo */}
       {erro && erro.tipo === "fora_escopo" && (
         <Card>
           <div className="flex gap-3 items-start">
@@ -128,22 +136,16 @@ export default function ConsultarPage() {
       {/* Resultado */}
       {resultado && !loading && (
         <div className="space-y-4">
-          {/* Badge de criticidade */}
           <BadgeCriticidade nivel={resultado.criticidade} />
 
-          {/* Alertas de vigência */}
           {resultado.alertas_vigencia
             ?.filter((a) => a.alerta)
             .map((a, i) => (
-              <div
-                key={i}
-                className="p-3 bg-amber-50 border border-amber-200 rounded-md"
-              >
+              <div key={i} className="p-3 bg-amber-50 border border-amber-200 rounded-md">
                 <p className="text-xs text-amber-700">{a.mensagem}</p>
               </div>
             ))}
 
-          {/* Resposta principal */}
           <Card titulo="Análise" acento="primary">
             <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
               {resultado.resposta}
@@ -153,12 +155,12 @@ export default function ConsultarPage() {
               forcaContraTese={resultado.forca_corrente_contraria}
               scoringConfianca={resultado.scoring_confianca}
               risco={resultado.risco_adocao}
+              mostrarDisclaimer={false}
             />
           </Card>
 
-          {/* Saídas por stakeholder */}
           {resultado.saidas_stakeholders && resultado.saidas_stakeholders.length > 0 && (
-            <Card titulo="🎯 Acionável por Área">
+            <Card titulo="🎯 O que isso significa para cada área">
               <div className="space-y-4">
                 {resultado.saidas_stakeholders.map((s) => (
                   <div key={s.stakeholder_id}>
@@ -173,6 +175,9 @@ export default function ConsultarPage() {
               </div>
             </Card>
           )}
+
+          {/* CTA de documentação — sempre ao final */}
+          <CTADocumentar query={query} resultado={resultado} />
         </div>
       )}
     </div>

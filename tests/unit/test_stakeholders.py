@@ -87,20 +87,19 @@ def test_todos_perfis_completos():
 # ---------------------------------------------------------------------------
 # 6. Decomposição com mock LLM persiste no banco
 # ---------------------------------------------------------------------------
-@patch("src.outputs.stakeholders.psycopg2.connect")
 @patch.object(StakeholderDecomposer, "_adaptar_conteudo", return_value="Resumo adaptado mock")
-def test_decompor_persiste_banco(mock_adaptar, mock_connect):
+def test_decompor_persiste_banco(mock_adaptar):
     mock_conn = MagicMock()
     mock_cur = MagicMock()
     mock_conn.cursor.return_value = mock_cur
     mock_cur.fetchone.return_value = (99,)  # db_id
-    mock_connect.return_value = mock_conn
 
     decomp = StakeholderDecomposer()
     views = decomp.decompor(
         output_id=5,
         stakeholders=[StakeholderTipo.CFO, StakeholderTipo.JURIDICO],
         conteudo={"recomendacao_principal": "Adotar regime X"},
+        conn=mock_conn,  # passa conn mockada diretamente, evita FK violation no banco real
     )
     assert len(views) == 2
     assert all(isinstance(v, StakeholderView) for v in views)
