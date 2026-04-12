@@ -19,7 +19,9 @@ from src.db.pool import get_conn, put_conn
 
 logger = logging.getLogger(__name__)
 
-_BYPASS_UUID = "00000000-0000-0000-0000-000000000000"
+# SEC-09: sentinela de integridade — UUID zero não existe na tabela users.
+# Pula MAU tracking para este valor; não é bypass de autenticação.
+_NULL_USER_SENTINEL = "00000000-0000-0000-0000-000000000000"
 
 
 def _primeiro_dia_mes(referencia: Optional[date] = None) -> date:
@@ -55,7 +57,7 @@ def registrar_evento_mau(user_id: Optional[str]) -> bool:
     Returns:
         True se registrado com sucesso, False caso contrário.
     """
-    if not user_id or user_id == _BYPASS_UUID:
+    if not user_id or user_id == _NULL_USER_SENTINEL:
         return False
 
     active_month = _primeiro_dia_mes()

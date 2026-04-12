@@ -757,9 +757,11 @@ def _registrar_interacao(
     alertas_vigencia: Optional[list] = None,
 ) -> None:
     """Registra em ai_interactions."""
-    # Opção A: UUID de bypass (BYPASS_AUTH) não existe em users — gravar NULL
-    _BYPASS_USER_ID = "00000000-0000-0000-0000-000000000000"
-    if user_id == _BYPASS_USER_ID:
+    # SEC-09: sentinela de integridade — o UUID zero não existe na tabela users.
+    # Converte para NULL antes do INSERT para evitar FK violation.
+    # NÃO é um bypass de autenticação: toda request já passou pelo JWT/X-Api-Key.
+    _NULL_USER_SENTINEL = "00000000-0000-0000-0000-000000000000"
+    if user_id == _NULL_USER_SENTINEL:
         user_id = None
     try:
         cur = conn.cursor()

@@ -213,7 +213,7 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 | **UI Upgrade — Layout mobile hamburguer + Logo dark v1** | ✅ |
 | **Gate U2** | ⏳ Pendente |
 | **Deploy VPS Hostinger** | ✅ Produção no ar — https://tribus-ai.com.br |
-| **SEC-09 BYPASS_AUTH=False** | ⏳ Pendente (fazer após validar SEC-08) |
+| **SEC-09 BYPASS_AUTH=False** | ✅ Confirmado: FastAPI ativo não tem BYPASS_AUTH. Zero UUIDs renomeados para _NULL_USER_SENTINEL (sentinela de integridade DB, não auth bypass) |
 | **SEC-10 IDs sequenciais → UUID (cases/outputs)** | ⏳ Pendente (requer migration + backup) |
 
 - **Suite de testes backend:** 647 passando, 0 falhas (referência pós Sprint-T1/T2 QA — Abril 2026)
@@ -252,6 +252,16 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 ```
 
 Template: `/Users/jairfahl/Downloads/tribus-ai-light/TASKS_TEMPLATE.md`
+
+### Antes de qualquer git push para produção:
+
+```bash
+bash scripts/pre_deploy_check.sh
+```
+
+Zero erros = pode prosseguir. Qualquer erro = corrigir antes do push.
+O script verifica: arquivos não rastreados, testes backend, build frontend,
+LOCKFILE_MODE válido, e ausência de secrets hardcoded em src/.
 
 ---
 

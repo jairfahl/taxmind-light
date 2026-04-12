@@ -24,7 +24,9 @@ THRESHOLD_SUGESTAO = 3
 JANELA_DIAS = 90
 SILENCIO_PADRAO_DIAS = 30
 
-_BYPASS_UUID = "00000000-0000-0000-0000-000000000000"
+# SEC-09: sentinela de integridade — UUID zero não existe na tabela users.
+# Pula analytics para este valor; não é bypass de autenticação.
+_NULL_USER_SENTINEL = "00000000-0000-0000-0000-000000000000"
 
 # Temas mapeados a partir das tags de aprendizado_institucional
 TEMAS_CONFIG: dict[str, str] = {
@@ -52,7 +54,7 @@ def registrar_tags_analise(
     Chamado após cada análise — incrementa contagem por tema.
     Tags desconhecidas (fora de TEMAS_CONFIG) são ignoradas.
     """
-    if not user_id or user_id == _BYPASS_UUID or not tags:
+    if not user_id or user_id == _NULL_USER_SENTINEL or not tags:
         return
 
     temas_validos = [t for t in tags if t in TEMAS_CONFIG]
@@ -88,7 +90,7 @@ def detectar_padroes(user_id: Optional[str]) -> list[dict]:
     Exclui temas silenciados e temas com sugestão já desativada.
     Retorna no máximo 3 padrões ordenados por frequência.
     """
-    if not user_id or user_id == _BYPASS_UUID:
+    if not user_id or user_id == _NULL_USER_SENTINEL:
         return []
 
     janela_inicio = date.today() - timedelta(days=JANELA_DIAS)

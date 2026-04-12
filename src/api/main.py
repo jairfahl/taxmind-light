@@ -25,6 +25,15 @@ GET  /v1/billing/mau                              — MAU por tenant/mês (meter
 POST /v1/webhooks/asaas                           — webhook de billing Asaas
 """
 
+# === VALIDAÇÃO DE STARTUP — deve ser a primeira coisa a executar ===
+# Falha com mensagem clara antes de qualquer import de negócio.
+# Evita o padrão: ValueError silencioso → API não sobe → nginx 502.
+from dotenv import load_dotenv as _load_dotenv_early
+_load_dotenv_early()
+from src.startup_validation import validate_env as _validate_env
+_validate_env()
+# ====================================================================
+
 import hashlib
 import logging
 import os
