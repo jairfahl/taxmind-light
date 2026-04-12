@@ -26,8 +26,11 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("tribus_token");
-      window.location.href = "/login";
+      // Não redirecionar se já está na página de login — senão limpa o form
+      if (!window.location.pathname.includes("/login")) {
+        localStorage.removeItem("tribus_token");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(err);
   }
