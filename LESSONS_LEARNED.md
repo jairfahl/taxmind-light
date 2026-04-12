@@ -317,7 +317,7 @@ Atualizar esta tabela quando um item for fechado.
 |---|---|---|---|
 | ~~D-01~~ | ~~SEC-09: BYPASS_AUTH=False~~ | ~~Segurança crítica em produção~~ | ✅ **Fechado Abril 2026** — FastAPI ativo não tem BYPASS_AUTH. Zero UUIDs renomeados para `_NULL_USER_SENTINEL` |
 | ~~D-02~~ | ~~Backup automatizado do `taxmind_pgdata`~~ | ~~Perda irreversível de dados~~ | ✅ **Fechado Abril 2026** — `scripts/backup_db.sh` criado: pg_dump diário comprimido, retenção 7 backups, cron 03h00 no VPS. Expandível para S3. |
-| D-03 | SEC-10: IDs sequenciais → UUID em cases/outputs | Enumeração e segurança | Antes de dados sensíveis de clientes |
+| D-03 | SEC-10: IDs sequenciais → UUID em cases/outputs | Enumeração e segurança | ⚠️ **Abril 2026** — migration `118_uuid_cases_outputs.sql` criada e testada (dry-run com ROLLBACK OK). Partes 1+2 validadas. Parte 3 (swap PK/FK) requer aprovação do PO + janela de manutenção + alterações de código em API e frontend. |
 | D-04 | Corpus Manager sem responsável formal | Desatualização silenciosa do corpus | Ao atingir 10 clientes pagantes |
 | D-05 | Tab Consultar com resposta mais rasa que Protocolo | Qualidade inconsistente | Aplicar PROMPT_DIAGNOSTICO antes do lançamento |
 | D-06 | Billing Asaas produção não contratado | Monetização bloqueada | Antes de aceitar primeiro pagamento |
