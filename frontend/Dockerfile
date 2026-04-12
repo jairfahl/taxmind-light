@@ -4,7 +4,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ENV NEXT_PUBLIC_API_URL=https://api.tribus-ai.com.br
+ARG NEXT_PUBLIC_API_URL=https://tribus-ai.com.br/api
+ARG NEXT_PUBLIC_API_INTERNAL_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_INTERNAL_KEY=$NEXT_PUBLIC_API_INTERNAL_KEY
 RUN npm run build
 
 # Stage 2 — Produção (imagem mínima)
