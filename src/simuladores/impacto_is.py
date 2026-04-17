@@ -65,6 +65,23 @@ PRODUTOS_IS: dict[str, dict] = {
         "base_legal": "LC 214/2025, art. 412, VI",
         "confirmada": False,
     },
+    # IS-1 fix: categorias do Anexo XVII LC 214/2025 — produtos ausentes no código anterior
+    "combustiveis": {
+        "label": "Combustíveis Fósseis (petróleo, gás natural, carvão)",
+        "aliquota_estimada_min": 0.001,
+        "aliquota_estimada_max": 0.010,
+        "aliquota_base": 0.005,
+        "base_legal": "LC 214/2025, Anexo XVII (combustíveis fósseis)",
+        "confirmada": False,
+    },
+    "apostas_jogos": {
+        "label": "Apostas e Jogos (loterias, fantasy sports, apostas esportivas)",
+        "aliquota_estimada_min": 0.10,
+        "aliquota_estimada_max": 0.30,
+        "aliquota_base": 0.15,
+        "base_legal": "LC 214/2025, Anexo XVII (concursos de prognósticos e apostas)",
+        "confirmada": False,
+    },
 }
 
 
@@ -129,7 +146,16 @@ def calcular_impacto_is(cenario: CenarioIS) -> ResultadoIS:
     ressalvas = [
         f"Alíquota IS de {aliquota:.0%} é ESTIMADA — "
         f"sujeita a regulamentação por lei ordinária. {config.get('base_legal', '')}",
-        "O IS incide 'por fora' do preço (aumenta o preço final ao consumidor).",
+        # IS-2 fix: IS inicia em 1º/01/2027 (não 2026 — ano-teste é só CBS/IBS)
+        "Vigência: IS entra em vigor em 1º/01/2027 (LC 214/2025). "
+        "Em 2026 apenas CBS e IBS operam em fase-teste.",
+        "O IS é calculado 'por fora' (não integra sua própria base de cálculo — LC 214/2025, art. 412).",
+        # IS-3 fix: IS não gera créditos para compradores downstream
+        "ATENÇÃO: IS é MONOFÁSICO e NÃO gera crédito para compradores downstream. "
+        "O custo do IS é definitivo na cadeia — 'sem direito a crédito tributário'.",
+        # IS-4 fix: IBS/CBS incidem sobre preço + IS
+        f"IBS+CBS incidem sobre o preço COM IS (R$ {preco_com_is:,.2f}), "
+        "não sobre o preço original. Carga tributária total real é superior ao IS isolado.",
         f"Elasticidade '{cenario.elasticidade}' estimada — "
         "redução de volume real depende do mercado específico.",
     ]

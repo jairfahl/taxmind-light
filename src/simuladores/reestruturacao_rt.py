@@ -31,16 +31,18 @@ BENEFICIO_ICMS_UF: dict[str, float] = {
     "SE": 0.08, "SP": 0.05, "TO": 0.09,
 }
 
-# Fase-out progressivo dos incentivos ICMS (2026–2033)
+# RE-1 fix: fase-out dos incentivos ICMS conforme LC 214/2025.
+# Incentivos ICMS permanecem 100% em 2026-2028; redução começa em 2029
+# com Fundo de Compensação de Benefícios Fiscais (2029-2032 per LC 214/2025).
 PHASEOUT_ICMS: dict[int, float] = {
     2026: 1.00,
-    2027: 0.80,
-    2028: 0.60,
-    2029: 0.40,
-    2030: 0.20,
-    2031: 0.10,
-    2032: 0.05,
-    2033: 0.00,
+    2027: 1.00,  # incentivos plenos — IBS ainda em fase-teste
+    2028: 1.00,  # incentivos plenos — IBS ainda em fase-teste
+    2029: 0.80,  # redução começa; fundo de compensação ativo
+    2030: 0.60,
+    2031: 0.40,
+    2032: 0.20,
+    2033: 0.00,  # ICMS extinto
 }
 
 

@@ -9,7 +9,11 @@ import pytest
 
 from src.simuladores.carga_rt import (
     ANOS_SIMULADOS,
+    CBS_ALIQUOTA_PLENA,
+    IBS_ALIQUOTA_PLENA,
     CenarioOperacional,
+    _aliquota_cbs,
+    _aliquota_ibs,
     formatar_brl,
     simular_carga,
     simular_multiplos_anos,
@@ -80,17 +84,13 @@ def test_carga_atual_positiva(cenario_lucro_real_misto):
     assert atual.regime == "atual"
 
 
-def test_carga_nova_2026_menor_que_atual(cenario_lucro_real_misto):
-    """Em 2026 (ano-teste CBS 0,9% + IBS 0,1%), carga nova deve ser bem menor."""
-    atual, novo = simular_carga(cenario_lucro_real_misto, 2026)
-    assert novo.carga_liquida < atual.carga_liquida
-
-
 def test_carga_nova_2033_plena(cenario_lucro_real_misto):
-    """Em 2033 CBS+IBS plenos — carga bruta deve ser > 0; regime = novo."""
+    """Em 2033 CBS+IBS plenos — CBS=8,8%, IBS=17,7%; regime = novo."""
     _, novo = simular_carga(cenario_lucro_real_misto, 2033)
     assert novo.carga_bruta > 0
     assert novo.regime == "novo"
+    assert novo.detalhes["aliquota_cbs"] == pytest.approx(8.8)
+    assert novo.detalhes["aliquota_ibs"] == pytest.approx(17.7)
 
 
 def test_aliquota_efetiva_entre_0_e_1(cenario_lucro_real_misto):
@@ -126,6 +126,63 @@ def test_projecao_variacao_pct_presente(cenario_lucro_real_misto):
     for p in proj:
         assert "variacao_pct" in p
         assert isinstance(p["variacao_pct"], float)
+
+
+# ---------------------------------------------------------------------------
+# Novos testes — modelo de transição corrigido
+# ---------------------------------------------------------------------------
+
+def test_2024_2025_nova_igual_atual():
+    """Em 2024 e 2025, regime novo deve espelhar o atual (CBS/IBS inexistentes)."""
+    cenario = CenarioOperacional(
+        faturamento_anual=10_000_000.0,
+        regime_tributario="lucro_presumido",
+        tipo_operacao="so_mercadorias",
+        percentual_credito_novo=0.0,
+    )
+    for ano in (2024, 2025):
+        atual, novo = simular_carga(cenario, ano)
+        assert novo.carga_liquida == atual.carga_liquida, f"Falhou no ano {ano}"
+
+
+def test_2026_nova_igual_atual():
+    """Em 2026, CBS-teste é neutro por crédito PIS/COFINS — carga nova == atual."""
+    cenario = CenarioOperacional(
+        faturamento_anual=10_000_000.0,
+        regime_tributario="lucro_presumido",
+        tipo_operacao="so_mercadorias",
+        percentual_credito_novo=0.0,
+    )
+    atual, novo = simular_carga(cenario, 2026)
+    assert novo.carga_liquida == atual.carga_liquida
+
+
+def test_2027_icms_fator_1_para_so_mercadorias():
+    """Em 2027, so_mercadorias deve usar fator ICMS 1.0 (não 0.5)."""
+    cenario = CenarioOperacional(
+        faturamento_anual=10_000_000.0,
+        regime_tributario="lucro_presumido",
+        tipo_operacao="so_mercadorias",
+        percentual_credito_novo=0.0,
+    )
+    _, novo = simular_carga(cenario, 2027)
+    # ICMS_MEDIO=0.17, fator_tipo=1.0 (so_mercadorias), fator_icms=1.0 (2027)
+    esperado_icms = round(10_000_000.0 * 0.17 * 1.0 * 1.0, 2)
+    assert novo.detalhes["icms_residual"] == esperado_icms
+
+
+def test_ibs_2029_nao_e_pleno():
+    """Em 2029, IBS deve ser 11% (transição), não 17,7% (pleno)."""
+    aliq_2029 = _aliquota_ibs(2029)
+    assert aliq_2029 < IBS_ALIQUOTA_PLENA
+    assert aliq_2029 == pytest.approx(0.110)
+
+
+def test_cbs_uniforme_bens_servicos():
+    """CBS deve ser uniforme (8,8%) para qualquer operação em 2033."""
+    aliq_2033 = _aliquota_cbs(2033)
+    assert aliq_2033 == pytest.approx(CBS_ALIQUOTA_PLENA)
+    assert aliq_2033 == pytest.approx(0.088)
 
 
 # ---------------------------------------------------------------------------

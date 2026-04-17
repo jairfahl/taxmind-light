@@ -59,20 +59,33 @@ CATEGORIAS_AQUISICAO = {
         "alerta": "Alíquota presumida a ser definida pelo CGIBS. Risco de glosa se presumido incorreto.",
     },
     "uso_consumo": {
-        "label": "Uso e consumo (despesas gerais)",
-        "creditamento": TipoCreditamento.INDEFINIDO,
-        "base_legal": "LC 214/2025, art. 28 — regulamentação pendente",
-        "descricao": "Creditamento depende de regulamentação do Comitê Gestor.",
-        "risco": "alto",
-        "alerta": "Não reconhecer créditos de uso e consumo até regulamentação definitiva.",
+        "label": "Uso e consumo (despesas gerais de negócio)",
+        # CR-1 fix: art. 28 garante não-cumulatividade ampla; art. 57 lista taxativamente o
+        # que NÃO gera crédito (itens de uso pessoal). Despesas gerais de negócio SÃO creditáveis.
+        "creditamento": TipoCreditamento.INTEGRAL,
+        "base_legal": "LC 214/2025, arts. 28 e 57",
+        "descricao": (
+            "Despesas gerais da atividade econômica geram crédito integral (art. 28). "
+            "Exceções — sem direito a crédito: joias, bebidas alcoólicas, tabaco, armas, "
+            "bens recreativos/estéticos e bens cedidos a pessoas físicas vinculadas (art. 57)."
+        ),
+        "risco": "medio",
+        "alerta": (
+            "Segregar itens de uso pessoal (art. 57 LC 214/2025) — estes NÃO geram crédito. "
+            "Demais despesas gerais da atividade econômica são creditáveis."
+        ),
     },
     "operacoes_imunes_isentas": {
         "label": "Aquisições vinculadas a saídas imunes ou isentas",
         "creditamento": TipoCreditamento.NENHUM,
         "base_legal": "LC 214/2025, art. 35",
-        "descricao": "Sem direito a crédito. Exige reversão via NF-e de Débito tipo 02.",
+        "descricao": "Sem direito a crédito. Exige reversão proporcional conforme art. 35.",
         "risco": "alto",
-        "alerta": "Créditos já tomados devem ser revertidos via NF-e débito tipo 02 (Ajuste SINIEF 49/2025).",
+        # CR-3 fix: removida referência "Ajuste SINIEF 49/2025" não verificável na lei
+        "alerta": (
+            "Créditos já tomados devem ser revertidos na proporção das saídas imunes/isentas "
+            "(LC 214/2025, art. 35). Verificar regulamentação do CGIBS sobre procedimento de estorno."
+        ),
     },
     "exportacoes": {
         "label": "Aquisições para exportação",
@@ -120,7 +133,11 @@ class ResultadoMonitorCreditos:
     oportunidade_capex: float
     itens: list = field(default_factory=list)
     alertas: list = field(default_factory=list)
-    prazo_restituicao_dias: int = 60
+    # CR-2 fix: prazo padrão é 180 dias (art. 39 LC 214/2025).
+    # Fast-track 60 dias: créditos de ativo imobilizado (CAPEX) ou dentro de 150% da média
+    # mensal dos 24 meses anteriores. Fast-track 30 dias: contribuintes em programa de
+    # conformidade tributária (CGIBS/RFB).
+    prazo_restituicao_dias: int = 180
 
 
 # ---------------------------------------------------------------------------

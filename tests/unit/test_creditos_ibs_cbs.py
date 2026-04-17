@@ -39,11 +39,13 @@ def test_fornecedor_simples_credito_presumido():
     assert 0 < r.credito_estimado_mensal < 100_000.0 * 0.265
 
 
-def test_uso_consumo_indefinido():
+def test_uso_consumo_integral_art28_57():
+    """CR-1 fix: art. 28 LC 214/2025 garante crédito amplo; art. 57 só exclui uso pessoal.
+    Despesas gerais de negócio SÃO creditáveis — classificação INDEFINIDO estava errada."""
     item = ItemAquisicao(categoria="uso_consumo", valor_mensal=50_000.0)
     r = _calcular_credito_item(item)
-    assert r.creditamento == TipoCreditamento.INDEFINIDO
-    assert r.credito_estimado_mensal == 0.0
+    assert r.creditamento == TipoCreditamento.INTEGRAL
+    assert r.credito_estimado_mensal > 0.0
 
 
 def test_mapear_creditos_soma_correta():

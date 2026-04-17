@@ -4,11 +4,13 @@ src/simuladores/carga_rt.py — MP-01 Simulador Comparativo de Carga RT (G18).
 Calcula carga tributária estimada nos regimes atual (PIS/COFINS + ICMS/ISS)
 e novo (CBS + IBS) para um cenário operacional, projetando transição 2026-2033.
 
-Premissas de alíquota (DC v7 / LC 214-2025):
-  - CBS: 8,8% (serviços) / 9,9% (mercadorias) — fase plena
-  - IBS: 17,7% (média nacional estimada RFB 2025)
-  - Período teste CBS: 0,9% (2026) → plena em 2027
-  - Período teste IBS: idem CBS (simbólico 2026), gradual 2027-2028
+Premissas de alíquota (EC 132/2023 + LC 214/2025):
+  - CBS: 8,8% uniforme (bens e serviços) — fase plena
+  - IBS: 17,7% (média nacional estimada RFB/2025) — fase plena
+  - Período teste CBS: 0,9% (2026) — neutro por crédito PIS/COFINS equivalente
+  - IBS gradual: 1% (2027), 6% (2028), 11% (2029), 13% (2030), 15% (2031), 16,5% (2032)
+  - ICMS phase-out: 100% em 2027-2028; 80/60/40/20% em 2029-2032; extinto em 2033
+  - 2024-2026: regime atual vigente (CBS-teste 2026 é neutro)
   - Crédito pleno admitido para CBS/IBS (exceto setores específicos).
   - ICMS médio nacional: 17%, ISS: 2-5%; PIS/COFINS: 9,25% (lucro real)
     ou 3,65% (presumido).
@@ -25,15 +27,33 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 # CBS — Contribuição sobre Bens e Serviços (federal)
-CBS_ALIQUOTA_PLENA_SERVICOS = 0.088    # 8,8%
-CBS_ALIQUOTA_PLENA_MERCADORIAS = 0.099  # 9,9%
-CBS_ALIQUOTA_TESTE_2026 = 0.009        # 0,9% (ano-teste)
+# BUG 6 fix: CBS é uniforme para bens e serviços (EC 132/2023 + LC 214/2025)
+CBS_ALIQUOTA_PLENA = 0.088             # 8,8% uniforme
+CBS_ALIQUOTA_TESTE_2026 = 0.009        # 0,9% (ano-teste — neutro por crédito PIS/COFINS)
 
 # IBS — Imposto sobre Bens e Serviços (estados+municípios)
 IBS_ALIQUOTA_PLENA = 0.177             # 17,7% (média nacional RFB/2025)
 IBS_ALIQUOTA_TESTE_2026 = 0.001        # 0,1% simbólico
-IBS_ALIQUOTA_TRANSICAO_2027 = 0.010    # 1% (redução ICMS+ISS compensa)
-IBS_ALIQUOTA_TRANSICAO_2028 = 0.060    # 6%
+# BUG 5 fix: IBS gradual 2027-2032 per LC 214/2025 (não salta para pleno em 2029)
+IBS_ALIQUOTA_TRANSICAO = {
+    2027: 0.010,   # 1%
+    2028: 0.060,   # 6%
+    2029: 0.110,   # 11%
+    2030: 0.130,   # 13%
+    2031: 0.150,   # 15%
+    2032: 0.165,   # 16,5%
+}
+
+# BUG 4 fix: ICMS permanece 100% em 2027-2028; redução começa em 2029 per LC 214/2025 art. 348
+ICMS_FATOR_TRANSICAO = {
+    2027: 1.00,
+    2028: 1.00,
+    2029: 0.80,
+    2030: 0.60,
+    2031: 0.40,
+    2032: 0.20,
+    # 2033+: 0.0 (extinto)
+}
 
 # Regimes atuais (PIS/COFINS)
 PISCOFINS_LUCRO_REAL = 0.0925          # 9,25%
@@ -51,7 +71,7 @@ CREDITO_ICMS_PROPORCAO = 0.40          # 40% da carga ICMS é creditável na cad
 CREDITO_PIS_COFINS_PROPORCAO = 0.35    # 35% não cumulativo
 
 # Calendário de transição (LC 214-2025 art. 348-ss)
-ANOS_SIMULADOS = [2024, 2025, 2026, 2027, 2028, 2029, 2033]
+ANOS_SIMULADOS = [2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]
 
 
 # ---------------------------------------------------------------------------
@@ -158,35 +178,35 @@ def _carga_regime_atual(cenario: CenarioOperacional) -> tuple[float, float, dict
     return carga_bruta, creditos, detalhes
 
 
-def _aliquota_cbs(ano: int, tipo: str) -> float:
-    """CBS vigente para o ano e tipo de operação."""
+def _aliquota_cbs(ano: int) -> float:
+    """CBS vigente para o ano — uniforme para bens e serviços (EC 132/2023)."""
     if ano <= 2025:
         return 0.0
     if ano == 2026:
         return CBS_ALIQUOTA_TESTE_2026
-    aliq_plena = (CBS_ALIQUOTA_PLENA_SERVICOS if tipo == "so_servicos"
-                  else CBS_ALIQUOTA_PLENA_MERCADORIAS)
-    return aliq_plena
+    return CBS_ALIQUOTA_PLENA  # 2027+: 8,8% uniforme
 
 
 def _aliquota_ibs(ano: int) -> float:
-    """IBS vigente para o ano."""
+    """IBS vigente para o ano — gradual 2027-2032, pleno a partir de 2033."""
     if ano <= 2025:
         return 0.0
     if ano == 2026:
         return IBS_ALIQUOTA_TESTE_2026
-    if ano == 2027:
-        return IBS_ALIQUOTA_TRANSICAO_2027
-    if ano == 2028:
-        return IBS_ALIQUOTA_TRANSICAO_2028
-    return IBS_ALIQUOTA_PLENA  # 2029+
+    return IBS_ALIQUOTA_TRANSICAO.get(ano, IBS_ALIQUOTA_PLENA)
 
 
 def _carga_regime_novo(cenario: CenarioOperacional, ano: int) -> tuple[float, float, dict]:
     """Retorna (carga_bruta, creditos, detalhes) para regime CBS+IBS num dado ano."""
+    # BUG 1/2 fix: 2024-2026 — CBS/IBS inexistentes ou neutros; empresa paga regime atual
+    if ano <= 2026:
+        cb, cr, det = _carga_regime_atual(cenario)
+        det = dict(det, nota="regime_atual_vigente")
+        return cb, cr, det
+
     base = _base_tributavel(cenario)
 
-    aliq_cbs = _aliquota_cbs(ano, cenario.tipo_operacao)
+    aliq_cbs = _aliquota_cbs(ano)
     aliq_ibs = _aliquota_ibs(ano)
 
     cbs_bruto = base * aliq_cbs
@@ -197,18 +217,23 @@ def _carga_regime_novo(cenario: CenarioOperacional, ano: int) -> tuple[float, fl
     credito_ibs = ibs_bruto * cenario.percentual_credito_novo
 
     carga_bruta = cbs_bruto + ibs_bruto
-    creditos = credito_cbs + credito_ibs
 
-    # Em anos de transição (2027-2032), ICMS/ISS ainda coexistem com IBS
+    # ICMS/ISS residual (2027-2032) com fatores corretos per LC 214/2025
     icms_residual = 0.0
     iss_residual = 0.0
+    cred_icms_res = 0.0
     if 2027 <= ano <= 2032:
-        fator_reducao_icms = max(0.0, 1.0 - (ano - 2026) / 7)
+        fator_icms = ICMS_FATOR_TRANSICAO.get(ano, 0.0)
+        # BUG 3/4 fix: fator_tipo 1.0 para operação pura; 0.5 somente para misto
+        fator_tipo = 0.5 if cenario.tipo_operacao == "misto" else 1.0
         if cenario.tipo_operacao != "so_servicos":
-            icms_residual = base * ICMS_MEDIO * 0.5 * fator_reducao_icms
+            icms_residual = base * ICMS_MEDIO * fator_tipo * fator_icms
+            cred_icms_res = icms_residual * CREDITO_ICMS_PROPORCAO
         if cenario.tipo_operacao != "so_mercadorias":
-            iss_residual = base * ISS_MEDIO * 0.5 * fator_reducao_icms
+            iss_residual = base * ISS_MEDIO * fator_tipo * fator_icms
         carga_bruta += icms_residual + iss_residual
+
+    creditos = credito_cbs + credito_ibs + cred_icms_res
 
     detalhes = {
         "cbs": round(cbs_bruto, 2),
@@ -217,6 +242,7 @@ def _carga_regime_novo(cenario: CenarioOperacional, ano: int) -> tuple[float, fl
         "iss_residual": round(iss_residual, 2),
         "credito_cbs": round(credito_cbs, 2),
         "credito_ibs": round(credito_ibs, 2),
+        "credito_icms_residual": round(cred_icms_res, 2),
         "aliquota_cbs": round(aliq_cbs * 100, 2),
         "aliquota_ibs": round(aliq_ibs * 100, 2),
     }
