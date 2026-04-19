@@ -24,7 +24,7 @@ DISCLAIMER_COMPACTO = (
 # Versão para dossiês (mais formal)
 DISCLAIMER_DOSSIE = (
     "AVISO LEGAL: Esta análise é gerada por sistema de inteligência artificial "
-    "(Tribus-AI) com base na legislação tributária vigente na data da análise. "
+    "(Orbis.tax) com base na legislação tributária vigente na data da análise. "
     "Não constitui parecer jurídico, contábil ou consultoria tributária formal. "
     "A adoção de qualquer posição tributária é responsabilidade exclusiva do "
     "profissional competente e da organização. Recomenda-se validação com "

@@ -55,7 +55,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from src.api.auth_api import verificar_token_api
+from src.api.auth_api import verificar_token_api, verificar_sessao
 from auth import autenticar, buscar_usuario_por_email, gerar_hash_senha, gerar_token
 from src.email_service import enviar_email_confirmacao
 
@@ -114,7 +114,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://tribus-ai.com.br", "http://localhost:8521", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
+    allow_origins=["https://orbis.tax", "http://localhost:8521", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -488,22 +488,27 @@ def login(request: Request, req: LoginRequest):
     }
 
 
-@app.get("/v1/auth/me", dependencies=[Depends(verificar_token_api)])
+@app.get("/v1/auth/me", dependencies=[Depends(verificar_token_api), Depends(verificar_sessao)])
 def auth_me(user_id: str = Query(...)):
-    """Retorna dados do usuário incluindo onboarding_step."""
+    """Retorna dados do usuário incluindo onboarding_step e dados de trial."""
     logger.info("GET /v1/auth/me user_id=%s", user_id)
     conn = None
     try:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, email, nome, perfil, tenant_id, onboarding_step FROM users WHERE id = %s LIMIT 1",
+            """SELECT u.id, u.email, u.nome, u.perfil, u.tenant_id, u.onboarding_step,
+                      t.subscription_status, t.trial_ends_at
+               FROM users u
+               LEFT JOIN tenants t ON t.id = u.tenant_id
+               WHERE u.id = %s LIMIT 1""",
             (user_id,),
         )
         row = cur.fetchone()
         cur.close()
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        trial_ends = row[7]
         return {
             "id": str(row[0]),
             "email": row[1],
@@ -511,6 +516,8 @@ def auth_me(user_id: str = Query(...)):
             "perfil": row[3],
             "tenant_id": str(row[4]) if row[4] else None,
             "onboarding_step": row[5] if row[5] is not None else 0,
+            "subscription_status": row[6],
+            "trial_ends_at": trial_ends.isoformat() if trial_ends else None,
         }
     except HTTPException:
         raise
@@ -2219,9 +2226,12 @@ def verify_email(token: str = Query(..., description="Token de verificação env
 
         user_id, email, nome, perfil, tenant_id = row
 
+        import uuid as _uuid
+        novo_session_id = str(_uuid.uuid4())
         cur.execute(
-            "UPDATE users SET ativo = TRUE, email_verificado = TRUE, email_token = NULL WHERE id = %s",
-            (str(user_id),),
+            """UPDATE users SET ativo = TRUE, email_verificado = TRUE,
+               email_token = NULL, session_id = %s WHERE id = %s""",
+            (novo_session_id, str(user_id)),
         )
         conn.commit()
         cur.close()
@@ -2233,6 +2243,7 @@ def verify_email(token: str = Query(..., description="Token de verificação env
             id=str(user_id), email=email, nome=nome, perfil=perfil,
             ativo=True, primeiro_uso=None, criado_em=datetime.now(timezone.utc),
             tenant_id=str(tenant_id) if tenant_id else None,
+            session_id=novo_session_id,
         )
         jwt_token = gerar_token(usuario)
 
@@ -2256,6 +2267,138 @@ def verify_email(token: str = Query(..., description="Token de verificação env
             conn.rollback()
         logger.error("Erro em /v1/auth/verify-email: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BILLING — ASSINATURA ASAAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SubscribeRequest(BaseModel):
+    tenant_id:    str
+    billing_type: str = Field("CREDIT_CARD", pattern="^(CREDIT_CARD|PIX)$")
+
+
+@app.post("/v1/billing/subscribe", dependencies=[Depends(verificar_token_api)])
+def billing_subscribe(req: SubscribeRequest):
+    """
+    Cria customer + assinatura Starter no Asaas e retorna link de pagamento.
+    Sandbox: ASAAS_BASE_URL aponta para sandbox.asaas.com.
+    Valor base: R$ 497,00 — descontado conforme tenants.desconto_percentual.
+    """
+    logger.info("POST /v1/billing/subscribe tenant_id=%s billing_type=%s", req.tenant_id, req.billing_type)
+    conn = None
+    try:
+        from src.billing.asaas import criar_customer, criar_assinatura, buscar_pagamentos_assinatura
+
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT razao_social, asaas_customer_id, asaas_subscription_id,
+                      desconto_percentual,
+                      (SELECT email FROM users WHERE tenant_id = t.id AND perfil = 'ADMIN' LIMIT 1),
+                      cnpj_raiz
+               FROM tenants t WHERE t.id = %s LIMIT 1""",
+            (req.tenant_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Tenant não encontrado.")
+
+        razao_social, asaas_customer_id, asaas_subscription_id, desconto, email_admin, cnpj = row
+
+        if asaas_subscription_id:
+            raise HTTPException(status_code=409, detail="Assinatura já existe para este tenant.")
+
+        # Criar customer se ainda não existe
+        if not asaas_customer_id:
+            customer = criar_customer(req.tenant_id, razao_social, email_admin or "", cnpj or "")
+            asaas_customer_id = customer["id"]
+            cur.execute(
+                "UPDATE tenants SET asaas_customer_id = %s WHERE id = %s",
+                (asaas_customer_id, req.tenant_id),
+            )
+
+        # Calcular valor com desconto
+        valor_base  = 497.00
+        desconto_pct = float(desconto or 0)
+        valor_final = round(valor_base * (1 - desconto_pct / 100), 2)
+
+        # Criar assinatura
+        assinatura = criar_assinatura(
+            customer_id=asaas_customer_id,
+            tenant_id=req.tenant_id,
+            plano="starter",
+            valor=valor_final,
+            billing_type=req.billing_type,
+        )
+        asaas_subscription_id = assinatura["id"]
+
+        cur.execute(
+            "UPDATE tenants SET asaas_subscription_id = %s, plano = 'starter' WHERE id = %s",
+            (asaas_subscription_id, req.tenant_id),
+        )
+        conn.commit()
+        cur.close()
+
+        # Buscar link de pagamento da primeira cobrança
+        pagamentos = buscar_pagamentos_assinatura(asaas_subscription_id)
+        invoice_url = None
+        if pagamentos.get("data"):
+            invoice_url = pagamentos["data"][0].get("invoiceUrl")
+
+        logger.info(
+            "Assinatura criada: tenant=%s subscription=%s valor=%.2f desconto=%.1f%%",
+            req.tenant_id, asaas_subscription_id, valor_final, desconto_pct,
+        )
+        return {
+            "invoice_url":        invoice_url,
+            "valor":              valor_final,
+            "desconto_percentual": desconto_pct,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Erro em /v1/billing/subscribe: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao processar assinatura. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+class DescontoRequest(BaseModel):
+    desconto_percentual: float = Field(..., ge=0, le=100)
+
+
+@app.patch("/v1/admin/tenants/{tenant_id}/desconto", dependencies=[Depends(verificar_token_api)])
+def admin_set_desconto(tenant_id: str, req: DescontoRequest):
+    """Define desconto percentual para o tenant (0–100%). Admin only."""
+    logger.info("PATCH /v1/admin/tenants/%s/desconto pct=%.1f", tenant_id, req.desconto_percentual)
+    conn = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE tenants SET desconto_percentual = %s WHERE id = %s RETURNING id",
+            (req.desconto_percentual, tenant_id),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Tenant não encontrado.")
+        conn.commit()
+        cur.close()
+        return {"ok": True, "desconto_percentual": req.desconto_percentual}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Erro em /v1/admin/tenants/desconto: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno.")
     finally:
         if conn:
             put_conn(conn)
@@ -2523,7 +2666,8 @@ def admin_mailing(
 
         cur.execute(f"""
             SELECT u.id, u.email, u.nome, u.criado_em,
-                   t.razao_social, t.subscription_status, t.trial_ends_at, t.trial_starts_at
+                   t.razao_social, t.subscription_status, t.trial_ends_at, t.trial_starts_at,
+                   t.id AS tenant_id, COALESCE(t.desconto_percentual, 0) AS desconto_percentual
             FROM users u
             JOIN tenants t ON t.id = u.tenant_id
             WHERE u.marketing_consent = TRUE
@@ -2539,14 +2683,16 @@ def admin_mailing(
             trial_ends = r[6]
             trial_expired = trial_ends is not None and trial_ends < datetime.now(trial_ends.tzinfo)
             records.append({
-                "id":                  str(r[0]),
-                "email":               r[1],
-                "nome":                r[2],
-                "criado_em":           r[3].isoformat() if r[3] else None,
-                "empresa":             r[4],
-                "subscription_status": r[5],
-                "trial_ends_at":       trial_ends.isoformat() if trial_ends else None,
-                "trial_expirado":      trial_expired,
+                "id":                   str(r[0]),
+                "email":                r[1],
+                "nome":                 r[2],
+                "criado_em":            r[3].isoformat() if r[3] else None,
+                "empresa":              r[4],
+                "subscription_status":  r[5],
+                "trial_ends_at":        trial_ends.isoformat() if trial_ends else None,
+                "trial_expirado":       trial_expired,
+                "tenant_id":            str(r[8]) if r[8] else None,
+                "desconto_percentual":  float(r[9]) if r[9] is not None else 0.0,
             })
         return {"records": records, "total": len(records)}
 

@@ -235,7 +235,7 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 - **Stack prod:** `docker-compose.prod.yml` + nginx reverse proxy (porta 80+443)
 - **Redeploy:** `cd /opt/tribus-ai-light && bash redeploy.sh`
 - **Logs:** `docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f`
-- **Admin padrão:** `admin@tribus-ai.com.br` / `Admin2026`
+- **Admin padrão:** `admin@orbis.tax` / `Admin2026`
 - **LOCKFILE_MODE no .env.prod:** deve ser `WARN` (não `ENFORCE` — valor inválido)
 - **ASAAS_API_KEY no .env.prod:** deve iniciar com `$$` (não `$`) para escape do docker compose
 - **Fix de senha via container:** `docker exec -i tribus-ai-api python3 < /tmp/fix_hash.py`

@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Tribus-AI — Inteligência Tributária",
+  title: "Orbis.tax — Inteligência Tributária",
   description:
     "Sistema de apoio à decisão tributária focado na Reforma Tributária brasileira (EC 132/2023, LC 214/2025, LC 227/2026).",
 };

@@ -65,7 +65,7 @@ def detectar_carimbo(decisao_gestor: str, recomendacao_ia: str) -> dict:
     if carimbo:
         mensagem = (
             f"**Detector de Carimbo ativado** ({similaridade:.0%} de sobreposição com a IA)\n\n"
-            "Sua decisão é muito similar à recomendação do Tribus-AI. "
+            "Sua decisão é muito similar à recomendação do Orbis.tax. "
             "Isso não é necessariamente um problema — mas precisamos garantir "
             "que foi uma escolha consciente.\n\n"
             "**Você considerou alternativas?** Confirme abaixo que esta é sua "

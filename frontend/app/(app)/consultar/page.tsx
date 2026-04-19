@@ -110,7 +110,7 @@ export default function ConsultarPage() {
             <AlertCircle size={18} className="text-amber-500 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-medium text-amber-700">
-                Essa informação não faz parte do propósito do Tribus-AI.
+                Essa informação não faz parte do propósito do Orbis.tax.
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Tente uma consulta mais adequada ao ecossistema tributário da Reforma Tributária brasileira — como alíquotas do IVA Dual, regras de CBS/IBS, benefícios fiscais ou impactos setoriais.

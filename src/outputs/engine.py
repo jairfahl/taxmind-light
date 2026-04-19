@@ -32,7 +32,7 @@ PROMPT_VERSION = "v1.0.0-sprint4"
 BASE_VERSION = "LC214_2025+EC132_2023+LC227_2026"
 
 DISCLAIMER_PADRAO = (
-    "Este output foi gerado com suporte de inteligência artificial (Tribus-AI). "
+    "Este output foi gerado com suporte de inteligência artificial (Orbis.tax). "
     "Não substitui parecer jurídico ou consultoria tributária especializada. "
     "Fundamentação legal: verificada na base de conhecimento na data de geração. "
     "Validade sujeita a alterações legislativas posteriores."

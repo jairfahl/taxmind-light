@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +49,15 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore();
   const [showPass, setShowPass] = useState(false);
   const [erro, setErro] = useState("");
+  const [authMsg, setAuthMsg] = useState("");
+
+  useEffect(() => {
+    const msg = sessionStorage.getItem("auth_msg");
+    if (msg) {
+      setAuthMsg(msg);
+      sessionStorage.removeItem("auth_msg");
+    }
+  }, []);
 
   const {
     register,
@@ -94,7 +103,7 @@ export default function LoginPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png"
-            alt="Tribus-AI"
+            alt="Orbis.tax"
             style={{ width: "180px", height: "auto" }}
           />
         </div>
@@ -137,7 +146,7 @@ export default function LoginPage() {
 
         {/* Rodapé esquerdo */}
         <p className="relative text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-          © 2026 Tribus-AI · Não constitui parecer jurídico
+          © 2026 Orbis.tax · Não constitui parecer jurídico
         </p>
       </div>
 
@@ -148,7 +157,7 @@ export default function LoginPage() {
           {/* Logo mobile */}
           <div className="lg:hidden mb-8 text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Tribus-AI" style={{ height: "36px", width: "auto", margin: "0 auto 8px" }} />
+            <img src="/logo.png" alt="Orbis.tax" style={{ height: "36px", width: "auto", margin: "0 auto 8px" }} />
             <p className="text-sm text-slate-500">Inteligência Tributária · Reforma 2026</p>
           </div>
 
@@ -169,6 +178,12 @@ export default function LoginPage() {
                 Acesse sua conta para continuar
               </p>
             </div>
+
+            {authMsg && (
+              <div className="mb-5 p-3 rounded-lg" style={{ background: "#fffbeb", border: "1px solid #fcd34d" }}>
+                <p className="text-xs font-medium" style={{ color: "#92400e" }}>{authMsg}</p>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               {/* E-mail */}
@@ -237,7 +252,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-xs mt-6" style={{ color: "#94a3b8" }}>
-            Tribus-AI © 2026 · Não constitui parecer jurídico
+            Orbis.tax © 2026 · Não constitui parecer jurídico
           </p>
         </div>
       </div>

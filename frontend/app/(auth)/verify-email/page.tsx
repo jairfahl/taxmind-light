@@ -66,7 +66,7 @@ export default function VerifyEmailPage() {
         {/* Logo */}
         <div className="mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Tribus-AI" style={{ height: "40px", width: "auto", margin: "0 auto" }} />
+          <img src="/logo.png" alt="Orbis.tax" style={{ height: "40px", width: "auto", margin: "0 auto" }} />
         </div>
 
         {estado === "loading" && (

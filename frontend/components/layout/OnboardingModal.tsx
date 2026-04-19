@@ -5,16 +5,34 @@ import { useAuthStore } from "@/store/auth";
 import api from "@/lib/api";
 
 export function OnboardingModal() {
-  const { user } = useAuthStore();
+  const { user, setAuth } = useAuthStore();
+  const token = useAuthStore((s) => s.token);
   const [step, setStep] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
     api
-      .get<{ onboarding_step: number }>("/v1/auth/me", { params: { user_id: user.id } })
-      .then((r) => setStep(r.data.onboarding_step ?? 0))
+      .get<{
+        onboarding_step: number;
+        subscription_status?: string | null;
+        trial_ends_at?: string | null;
+      }>("/v1/auth/me", { params: { user_id: user.id } })
+      .then((r) => {
+        setStep(r.data.onboarding_step ?? 0);
+        // Atualiza store com dados de trial vindos do backend
+        if (r.data.trial_ends_at !== undefined || r.data.subscription_status !== undefined) {
+          setAuth(
+            {
+              ...user,
+              subscription_status: r.data.subscription_status ?? null,
+              trial_ends_at: r.data.trial_ends_at ?? null,
+            },
+            token ?? ""
+          );
+        }
+      })
       .catch(() => setStep(99)); // on error, skip modal
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // null = loading, 0 = show modal, anything else = done
   if (step === null || step !== 0) return null;
@@ -66,7 +84,7 @@ function OnboardingStep0({
   return (
     <div className="space-y-4">
       <div>
-        <label className={LABEL_CLS}>Como você usa o Tribus-AI? ✱</label>
+        <label className={LABEL_CLS}>Como você usa o Orbis.tax? ✱</label>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={SELECT_CLS}>
           <option value="">Selecionar…</option>
           <option>Empresa (uso interno)</option>

@@ -1,46 +1,62 @@
 """
-src/email_service.py — Serviço de envio de e-mails transacionais via SMTP.
+src/email_service.py — Serviço de envio de e-mails transacionais via Resend HTTP API.
 
-Usa smtplib (stdlib Python) — zero dependência nova.
+Usa urllib.request (stdlib Python) — zero dependência nova.
 Configurado via variáveis de ambiente:
-  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_URL
+  RESEND_API_KEY  — API key do Resend (obrigatório)
+  RESEND_FROM     — remetente (default: Tribus-AI <noreply@tribus-ai.com.br>)
+  APP_URL         — base URL da aplicação para links de verificação
 
-Se vars ausentes: loga warning e retorna sem erro (dev-safe).
+Se RESEND_API_KEY ausente: loga warning e retorna sem erro (dev-safe).
+Domínio remetente deve estar verificado em resend.com/domains.
 """
 
+import json
 import logging
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import urllib.error
+import urllib.request
 
 logger = logging.getLogger(__name__)
 
-_SMTP_HOST = os.getenv("SMTP_HOST", "")
-_SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-_SMTP_USER = os.getenv("SMTP_USER", "")
-_SMTP_PASS = os.getenv("SMTP_PASS", "")
-_SMTP_FROM = os.getenv("SMTP_FROM", "Tribus-AI <noreply@tribus-ai.com.br>")
-_APP_URL   = os.getenv("APP_URL", "http://localhost:3000")
+_RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+_RESEND_FROM    = os.getenv("RESEND_FROM", "Orbis.tax <noreply@orbis.tax>")
+_APP_URL        = os.getenv("APP_URL", "http://localhost:3000")
+
+_RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
-def _smtp_configurado() -> bool:
-    return bool(_SMTP_HOST and _SMTP_USER and _SMTP_PASS)
+def _api_configurada() -> bool:
+    return bool(_RESEND_API_KEY)
 
 
-def _enviar(destinatario: str, assunto: str, html: str) -> None:
-    """Envia e-mail HTML via SMTP com STARTTLS."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = assunto
-    msg["From"]    = _SMTP_FROM
-    msg["To"]      = destinatario
-    msg.attach(MIMEText(html, "html", "utf-8"))
+def _enviar(destinatario: str, assunto: str, html: str) -> dict:
+    """Envia e-mail HTML via Resend HTTP API."""
+    payload = json.dumps({
+        "from":    _RESEND_FROM,
+        "to":      [destinatario],
+        "subject": assunto,
+        "html":    html,
+    }).encode("utf-8")
 
-    with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT, timeout=10) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(_SMTP_USER, _SMTP_PASS)
-        smtp.sendmail(_SMTP_FROM, destinatario, msg.as_string())
+    req = urllib.request.Request(
+        _RESEND_ENDPOINT,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {_RESEND_API_KEY}",
+            "Content-Type":  "application/json",
+            "User-Agent":    "tribus-ai/1.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            return body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Resend API {exc.code}: {body}") from exc
 
 
 def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
@@ -52,10 +68,10 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
         nome  : Nome do usuário para personalização
         token : UUID de verificação
     """
-    if not _smtp_configurado():
+    if not _api_configurada():
         logger.warning(
-            "SMTP não configurado — e-mail de confirmação não enviado para %s. "
-            "Configure SMTP_HOST, SMTP_USER e SMTP_PASS para ativar o envio.",
+            "RESEND_API_KEY não configurada — e-mail de confirmação não enviado para %s. "
+            "Configure RESEND_API_KEY para ativar o envio.",
             email,
         )
         return
@@ -77,7 +93,7 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
         <tr>
           <td style="background:#1a2f4e;padding:32px 40px;text-align:center">
             <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">
-              Tribus<span style="color:#3B9EE8">AI</span>
+              Orbis<span style="color:#3B9EE8">.tax</span>
             </span>
             <p style="margin:4px 0 0;font-size:11px;color:rgba(255,255,255,.55);
                       letter-spacing:2px;text-transform:uppercase">
@@ -96,7 +112,7 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
               Olá, <strong>{primeiro_nome}</strong>!
             </p>
             <p style="margin:0 0 28px;font-size:15px;color:#4a5568;line-height:1.6">
-              Seu cadastro na Tribus-AI foi recebido. Clique no botão abaixo para confirmar
+              Seu cadastro na Orbis.tax foi recebido. Clique no botão abaixo para confirmar
               seu e-mail e ativar seu período de teste gratuito de <strong>7 dias</strong>.
             </p>
 
@@ -134,7 +150,7 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
           <td style="background:#f7fafc;padding:20px 40px;text-align:center;
                      border-top:1px solid #e2e8f0">
             <p style="margin:0;font-size:11px;color:#a0aec0">
-              © 2026 Tribus-AI · Inteligência Tributária para a Reforma Tributária
+              © 2026 Orbis.tax · Inteligência Tributária para a Reforma Tributária
             </p>
           </td>
         </tr>
@@ -147,7 +163,7 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
 """
 
     try:
-        _enviar(email, "Confirme seu e-mail — Tribus-AI", html)
-        logger.info("E-mail de confirmação enviado para %s", email)
+        result = _enviar(email, "Confirme seu e-mail — Orbis.tax", html)
+        logger.info("E-mail de confirmação enviado para %s (id=%s)", email, result.get("id"))
     except Exception as e:
         logger.error("Falha ao enviar e-mail de confirmação para %s: %s", email, e)

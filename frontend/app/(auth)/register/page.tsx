@@ -36,7 +36,7 @@ const BULLETS = [
   },
   {
     icon: <ShieldCheck size={16} className="text-blue-300" />,
-    text: "Corpus curado da Reforma Tributária LC 214/2025",
+    text: "Base de conhecimento de suporte à decisão tributária",
   },
   {
     icon: <Lock size={16} className="text-blue-300" />,
@@ -118,7 +118,7 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Tribus-AI" style={{ width: "180px", height: "auto" }} />
+          <img src="/logo.png" alt="Orbis.tax" style={{ width: "180px", height: "auto" }} />
         </div>
 
         {/* Conteúdo central */}
@@ -142,9 +142,9 @@ export default function RegisterPage() {
 
           <ul className="space-y-4">
             {BULLETS.map(({ icon, text }) => (
-              <li key={text} className="flex items-start gap-3">
+              <li key={text} className="flex items-center gap-3">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                   style={{ background: "rgba(255,255,255,0.10)" }}
                 >
                   {icon}
@@ -158,7 +158,7 @@ export default function RegisterPage() {
         </div>
 
         <p className="relative text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-          © 2026 Tribus-AI · Não constitui parecer jurídico
+          © 2026 Orbis.tax · Não constitui parecer jurídico
         </p>
       </div>
 
@@ -169,7 +169,7 @@ export default function RegisterPage() {
           {/* Logo mobile */}
           <div className="lg:hidden mb-8 text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Tribus-AI" style={{ height: "36px", width: "auto", margin: "0 auto 8px" }} />
+            <img src="/logo.png" alt="Orbis.tax" style={{ height: "36px", width: "auto", margin: "0 auto 8px" }} />
             <p className="text-sm text-slate-500">7 dias grátis · sem cartão</p>
           </div>
 
@@ -357,7 +357,7 @@ export default function RegisterPage() {
                         className="mt-0.5 w-4 h-4 rounded border-slate-300 accent-blue-600 cursor-pointer shrink-0"
                       />
                       <label htmlFor="marketing" className="text-xs leading-relaxed cursor-pointer" style={{ color: "#64748b" }}>
-                        Concordo em receber comunicações e novidades da Tribus-AI por e-mail.{" "}
+                        Concordo em receber comunicações e novidades da Orbis.tax por e-mail.{" "}
                         <span style={{ color: "#94a3b8" }}>(opcional)</span>
                       </label>
                     </div>
@@ -412,7 +412,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-center text-xs mt-6" style={{ color: "#94a3b8" }}>
-            Tribus-AI © 2026 · Não constitui parecer jurídico
+            Orbis.tax © 2026 · Não constitui parecer jurídico
           </p>
         </div>
       </div>

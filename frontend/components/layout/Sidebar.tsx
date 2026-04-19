@@ -14,6 +14,15 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/utils";
 
+
+function diasRestantes(trialEndsAt: string): number {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const fim = new Date(trialEndsAt);
+  fim.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((fim.getTime() - hoje.getTime()) / 86_400_000));
+}
+
 const NAV = [
   { href: "/analisar",          label: "Analisar",       icon: Search,    destaque: true },
   { href: "/documentos",        label: "Documentos",     icon: FolderOpen, destaque: true },
@@ -46,12 +55,12 @@ export function Sidebar() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png"
-            alt="Tribus-AI"
+            alt="Orbis.tax"
             className="h-20 w-auto drop-shadow-md group-hover:scale-105 transition-transform duration-200"
           />
           <div className="text-center">
             <span className="block font-extrabold text-lg tracking-tight text-white leading-none">
-              Tribus<span style={{ color: "var(--color-accent-vivid, #3B9EE8)" }}>AI</span>
+              Orbis<span style={{ color: "var(--color-accent-vivid, #3B9EE8)" }}>.tax</span>
             </span>
             <span className="block text-[10px] tracking-widest uppercase mt-0.5" style={{ color: "rgba(255,255,255,.55)" }}>
               Inteligência Tributária
@@ -114,6 +123,33 @@ export function Sidebar() {
           <CheckCircle size={12} className="text-emerald-400" />
           Sistema operacional
         </div>
+
+        {/* Trial banner — visível apenas durante o período de trial */}
+        {user?.trial_ends_at && (!user.subscription_status || user.subscription_status === "trial") && (() => {
+          const dias = diasRestantes(user.trial_ends_at!);
+          const msg = dias === 0
+            ? "Seu trial encerra hoje."
+            : dias === 1
+            ? "Último dia de trial."
+            : `${dias} dias de trial restantes.`;
+          return (
+            <Link
+              href="/assinar"
+              className="block rounded-lg px-3 py-2.5 text-center transition-opacity hover:opacity-90 cursor-pointer"
+              style={{ background: dias <= 2 ? "rgba(220,38,38,.25)" : "rgba(59,158,232,.18)", border: `1px solid ${dias <= 2 ? "rgba(220,38,38,.45)" : "rgba(59,158,232,.35)"}` }}
+            >
+              <p className="text-[11px] font-medium leading-snug mb-1.5" style={{ color: dias <= 2 ? "#fca5a5" : "rgba(255,255,255,.80)" }}>
+                {msg}
+              </p>
+              <span
+                className="inline-block text-[10px] font-semibold px-3 py-1 rounded-full"
+                style={{ background: dias <= 2 ? "rgba(220,38,38,.40)" : "rgba(59,158,232,.35)", color: "#fff" }}
+              >
+                Vamos assinar?!
+              </span>
+            </Link>
+          );
+        })()}
 
         {user && (
           <div className="flex items-center gap-2 min-w-0">
