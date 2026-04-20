@@ -59,7 +59,6 @@ function SenhaRequisitos({ senha }: { senha: string }) {
     { ok: /\d/.test(senha),           label: "Número" },
     { ok: /[!@#$%^&*()\-_=+\[\]{};:'",.<>?/\\|`~]/.test(senha), label: "Caractere especial" },
   ];
-  if (!senha) return null;
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
       {checks.map(({ ok, label }) => (
@@ -251,7 +250,7 @@ export default function RegisterPage() {
                   {/* Nome */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#475569" }}>
-                      Nome completo
+                      Nome completo <span className="text-red-500">*</span>
                     </label>
                     <Input
                       {...register("nome")}
@@ -266,7 +265,7 @@ export default function RegisterPage() {
                   {/* E-mail */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#475569" }}>
-                      E-mail
+                      E-mail <span className="text-red-500">*</span>
                     </label>
                     <Input
                       {...register("email")}
@@ -281,7 +280,7 @@ export default function RegisterPage() {
                   {/* Senha */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#475569" }}>
-                      Senha
+                      Senha <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <Input
@@ -311,7 +310,7 @@ export default function RegisterPage() {
                   {/* Confirmar Senha */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#475569" }}>
-                      Confirmar senha
+                      Confirmar senha <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <Input
@@ -336,7 +335,7 @@ export default function RegisterPage() {
                   {/* Empresa */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#475569" }}>
-                      Empresa (Razão Social)
+                      Empresa (Razão Social) <span className="text-red-500">*</span>
                     </label>
                     <Input
                       {...register("razao_social")}
