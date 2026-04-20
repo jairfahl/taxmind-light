@@ -2297,6 +2297,142 @@ def verify_email(token: str = Query(..., description="Token de verificação env
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# RECUPERAÇÃO DE SENHA
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., description="E-mail do usuário cadastrado")
+
+
+class ResetPasswordRequest(BaseModel):
+    token:      str
+    nova_senha: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("nova_senha")
+    @classmethod
+    def validar_senha_forte(cls, v: str) -> str:
+        import re
+        erros = []
+        if len(v) < 8:
+            erros.append("mínimo 8 caracteres")
+        if not re.search(r"[A-Z]", v):
+            erros.append("ao menos uma letra maiúscula")
+        if not re.search(r"[a-z]", v):
+            erros.append("ao menos uma letra minúscula")
+        if not re.search(r"\d", v):
+            erros.append("ao menos um número")
+        if not re.search(r"[!@#$%^&*()\-_=+\[\]{};:'\",.<>?/\\|`~]", v):
+            erros.append("ao menos um caractere especial")
+        if erros:
+            raise ValueError("Senha inválida: " + ", ".join(erros))
+        return v
+
+
+@app.post("/v1/auth/forgot-password")
+@limiter.limit("3/minute")
+def forgot_password(request: Request, req: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    """
+    Solicita redefinição de senha. Gera token UUID válido por 1h e envia e-mail via Resend.
+    Retorna 200 se cadastrado (envia e-mail) ou 404 se e-mail não encontrado.
+    Público (sem X-API-Key). Rate-limited: 3 req/min por IP.
+    """
+    logger.info("POST /v1/auth/forgot-password email=%s", req.email)
+    conn = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT id, nome FROM users WHERE email = %s AND ativo = TRUE LIMIT 1",
+            (req.email,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="E-mail não encontrado. Verifique ou crie uma conta.")
+
+        user_id, nome = row
+        reset_token = str(uuid.uuid4())
+
+        cur.execute(
+            """UPDATE users
+               SET reset_token = %s, reset_token_expires_at = NOW() + INTERVAL '1 hour'
+               WHERE id = %s""",
+            (reset_token, str(user_id)),
+        )
+        conn.commit()
+        cur.close()
+
+        from src.email_service import enviar_email_recuperacao_senha
+        background_tasks.add_task(enviar_email_recuperacao_senha, req.email, nome, reset_token)
+
+        return {"message": "E-mail de recuperação enviado. Verifique sua caixa de entrada."}
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Erro em /v1/auth/forgot-password: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+@app.post("/v1/auth/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    """
+    Redefine a senha usando o token recebido por e-mail.
+    Token deve ser válido e não expirado (1h). Público (sem X-API-Key).
+    """
+    logger.info("POST /v1/auth/reset-password token=%s", req.token[:8] + "...")
+    conn = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute(
+            """SELECT id FROM users
+               WHERE reset_token = %s
+                 AND reset_token_expires_at > NOW()
+               LIMIT 1""",
+            (req.token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Link inválido ou expirado. Solicite um novo.")
+
+        user_id = str(row[0])
+        nova_hash = gerar_hash_senha(req.nova_senha)
+
+        cur.execute(
+            """UPDATE users
+               SET senha_hash = %s, reset_token = NULL, reset_token_expires_at = NULL
+               WHERE id = %s""",
+            (nova_hash, user_id),
+        )
+        conn.commit()
+        cur.close()
+
+        return {"message": "Senha redefinida com sucesso. Faça login com sua nova senha."}
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error("Erro em /v1/auth/reset-password: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # BILLING — ASSINATURA ASAAS
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -167,3 +167,82 @@ def enviar_email_confirmacao(email: str, nome: str, token: str) -> None:
         logger.info("E-mail de confirmação enviado para %s (id=%s)", email, result.get("id"))
     except Exception as e:
         logger.error("Falha ao enviar e-mail de confirmação para %s: %s", email, e)
+
+
+def enviar_email_recuperacao_senha(email: str, nome: str, token: str) -> None:
+    """
+    Envia e-mail com link para redefinição de senha. Token válido por 1 hora.
+    """
+    if not _api_configurada():
+        logger.warning("RESEND_API_KEY não configurada — e-mail de recuperação não enviado para %s.", email)
+        return
+
+    link = f"{_APP_URL}/redefinir-senha?token={token}"
+    primeiro_nome = nome.split()[0] if nome else "usuário"
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <tr>
+          <td style="background:#1a2f4e;padding:32px 40px;text-align:center">
+            <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">
+              Orbis<span style="color:#3B9EE8">.tax</span>
+            </span>
+            <p style="margin:4px 0 0;font-size:11px;color:rgba(255,255,255,.55);
+                      letter-spacing:2px;text-transform:uppercase">Inteligência Tributária</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 40px 32px">
+            <h1 style="margin:0 0 16px;font-size:22px;color:#1a2f4e;font-weight:700">Redefinir senha</h1>
+            <p style="margin:0 0 12px;font-size:15px;color:#4a5568;line-height:1.6">
+              Olá, <strong>{primeiro_nome}</strong>!
+            </p>
+            <p style="margin:0 0 28px;font-size:15px;color:#4a5568;line-height:1.6">
+              Recebemos uma solicitação para redefinir a senha da sua conta Orbis.tax.
+              Clique no botão abaixo. Este link é válido por <strong>1 hora</strong>.
+            </p>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px">
+              <tr>
+                <td style="background:#2E75B6;border-radius:6px">
+                  <a href="{link}"
+                     style="display:inline-block;padding:14px 36px;font-size:15px;
+                            font-weight:600;color:#ffffff;text-decoration:none">
+                    Redefinir senha
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#718096">Ou copie o link:</p>
+            <p style="margin:0 0 28px;font-size:12px;color:#3B9EE8;word-break:break-all">{link}</p>
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px">
+            <p style="margin:0;font-size:12px;color:#a0aec0;line-height:1.5">
+              Se você não solicitou a redefinição, ignore este e-mail. Sua senha permanece inalterada.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f7fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0">
+            <p style="margin:0;font-size:11px;color:#a0aec0">
+              © 2026 Orbis.tax · Inteligência Tributária para a Reforma Tributária
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+"""
+
+    try:
+        result = _enviar(email, "Redefinição de senha — Orbis.tax", html)
+        logger.info("E-mail de recuperação enviado para %s (id=%s)", email, result.get("id"))
+    except Exception as e:
+        logger.error("Falha ao enviar e-mail de recuperação para %s: %s", email, e)

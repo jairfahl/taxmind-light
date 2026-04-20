@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Link from "next/link";
 import { Eye, EyeOff, ShieldCheck, FileSearch, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,6 +235,13 @@ export default function LoginPage() {
               {erro && (
                 <div className="p-3 rounded-lg" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
                   <p className="text-xs font-medium" style={{ color: "#dc2626" }}>{erro}</p>
+                  <Link
+                    href="/recuperar-senha"
+                    className="text-xs font-semibold mt-1 block"
+                    style={{ color: "#2E75B6" }}
+                  >
+                    Esqueceu sua senha? Recuperar →
+                  </Link>
                 </div>
               )}
 
@@ -251,9 +259,20 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <p className="text-center text-xs mt-6" style={{ color: "#94a3b8" }}>
-            Orbis.tax © 2026 · Não constitui parecer jurídico
-          </p>
+          <div className="text-center mt-5 space-y-1">
+            <p className="text-xs" style={{ color: "#94a3b8" }}>
+              <Link href="/recuperar-senha" className="underline hover:opacity-80 transition-opacity">
+                Esqueceu sua senha?
+              </Link>
+              {" · "}
+              <Link href="/register" className="underline hover:opacity-80 transition-opacity">
+                Criar conta grátis
+              </Link>
+            </p>
+            <p className="text-xs" style={{ color: "#94a3b8" }}>
+              Orbis.tax © 2026 · Não constitui parecer jurídico
+            </p>
+          </div>
         </div>
       </div>
     </div>
