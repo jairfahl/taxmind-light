@@ -1,6 +1,6 @@
 # LESSONS_LEARNED.md
 # Orbis.tax — Lições Aprendidas
-**Versão:** 1.1
+**Versão:** 1.2
 **Atualizado em:** Abril 2026
 **Autor:** PO (Jair Fahl) + Claude
 **Localização:** `/Users/jairfahl/Downloads/tribus-ai-light/LESSONS_LEARNED.md`
@@ -105,6 +105,19 @@ Multi-Query, Step-Back e HyDE operam em paralelo causa resultados não-determin�
 e consumo de tokens não-controlado. A flag `_tool_activated` em `engine.py` é
 uma restrição de arquitetura — nunca remover.
 
+**Cores de texto no frontend devem usar variáveis CSS semânticas.**
+Usar `style={{ color: "#0f2040" }}` hardcoded quebra o dark mode silenciosamente —
+o background escurece mas o texto permanece dark, criando baixo contraste.
+**Regra derivada:** sempre usar `className="text-foreground"` ou `text-muted-foreground`
+(que mapeiam para CSS vars `--foreground` / `--muted-foreground` que o `@media prefers-color-scheme: dark`
+sobrescreve). Nunca `style={{ color }}` para texto que deve adaptar ao tema.
+
+**`useSearchParams()` no Next.js 16 exige Suspense boundary.**
+Páginas com `useSearchParams()` em componentes "use client" quebram o build de produção
+se não estiverem envoltas em `<Suspense>`. O erro aparece apenas no `next build`, não em dev.
+**Regra derivada:** qualquer componente que use `useSearchParams()` deve estar em sub-componente
+(ex: `VerifyEmailContent`) envolto por `<Suspense fallback={...}>` no componente exportado default.
+
 ### ❌ O que causou problemas
 
 **Migrations sem verificação de dependência geram erro silencioso em runtime.**
@@ -113,13 +126,20 @@ e só falha em operação real. O sistema sobe, parece ok, falha em produção.
 **Regra derivada:** antes de qualquer migration que cria FK, verificar se a tabela-pai existe
 com `\d <tabela>` no container. Sequência obrigatória no TASKS antes de qualquer migration.
 
+**Migrations locais não commitadas não chegam ao VPS via git pull.**
+Migrations 119–124 foram aplicadas localmente (ALTER TABLE direto no banco) para resolver
+um bug urgente em produção, mas nunca commitadas. O VPS nunca as recebeu.
+Resultado: produção com schema diferente do repositório, causando erros 500 em registro.
+**Regra derivada:** qualquer ALTER TABLE executado diretamente no banco DEVE ter um arquivo
+`migrations/NNN_descricao.sql` correspondente criado e commitado imediatamente.
+
 **BYPASS_AUTH é faca de dois gumes.**
 Viabilizou testes sem fricção. Criou dependências ocultas (UUID hardcoded, FK violation,
 lógica de trial sem efeito) que custaram tempo na ativação de produção.
 **Regra derivada:** SEC-09 (BYPASS_AUTH=False) é pré-requisito para qualquer usuário
 real com dados reais no sistema. Não negociável. Não postergar após o lançamento.
 
-**Variáveis de ambiente com caracteres especiais quebram o docker compose silenciosamente.**
+**Variáveis de ambiente com `$` quebram o docker compose silenciosamente.**
 `$` em valores de `.env.prod` é interpretado como variável pelo docker compose.
 `ASAAS_API_KEY=$aact_...` vira string vazia. Solução: `$$aact_...`.
 **Regra derivada:** todo `.env.prod.example` deve ter este comentário nas linhas com `$`:
@@ -169,14 +189,16 @@ O login funcionava mas redirecionava para rota inexistente — causando o compor
 
 **`docker compose restart` não relê `env_file`.**
 Só `up -d --force-recreate` recria o container com variáveis corretas.
+Após adicionar `RESEND_API_KEY` ao `.env.prod` e rodar `restart api`, a variável
+ainda não estava disponível no container — o e-mail continuava falhando silenciosamente.
 **Regra derivada:** após qualquer alteração de `.env.prod` no VPS:
-`docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate`
+`docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate api`
 Nunca usar `restart` para mudança de variável de ambiente.
 
 **O volume `taxmind_pgdata` é o ativo mais crítico — sem backup é risco existencial.**
 Contém todos os embeddings e o histórico de decisões dos clientes.
 **Regra derivada:** backup automatizado via `pg_dump` para storage externo é
-pré-requisito para o primeiro cliente pagante. Não após. Antes.
+pré-requisito para o primeiro cliente pagante. Não após. Antes. ✅ Implementado (scripts/backup_db.sh).
 
 **"Funciona local" não significa "está commitado".**
 O ambiente local pode ter arquivos que nunca passaram pelo git.
@@ -184,9 +206,37 @@ O VPS só tem o que está no repositório.
 **Regra derivada:** antes de qualquer deploy relevante, testar a partir de um clone limpo
 em diretório separado: `git clone <repo> /tmp/test-deploy && cd /tmp/test-deploy && npm run build`.
 
+**RESEND_API_KEY ausente do `.env.prod` bloqueou e-mails em produção silenciosamente.**
+O log mostrava `RESEND_API_KEY não configurada` mas o registro retornava HTTP 200.
+O usuário criava conta, recebia tela de sucesso, não recebia e-mail — e não conseguia logar.
+**Regra derivada:** ao implementar qualquer novo serviço que exige env var, adicionar
+à checklist pré-deploy e ao `.env.prod.example` imediatamente, antes de commitar.
+
 ---
 
-## 5. DEBUGGING E DIAGNÓSTICO
+## 5. DNS E DOMÍNIO
+
+### ✅ O que funciona
+
+**Verificar domínio Resend via DNS TXT — processo lento mas confiável.**
+A propagação DNS pode levar de 30 minutos a 24 horas. O botão "Verify Records" no painel
+Resend só funciona após propagação completa. Tentar antes gera falso negativo.
+**Regra derivada:** após configurar registros DNS, aguardar pelo menos 1 hora antes de
+tentar verificar. Usar `dig TXT _dmarc.orbis.tax @8.8.8.8` para checar propagação externamente.
+
+### ❌ O que causou problemas
+
+**Registro DKIM no DNS tem limite de 255 caracteres por string.**
+A chave DKIM gerada pelo Resend tem ~320 caracteres. Hostinger truncava silenciosamente.
+O registro aparecia "salvo" mas estava incompleto — verificação falhava repetidamente.
+**Regra derivada:** strings TXT > 255 chars devem ser divididas em múltiplas strings
+quoted no campo DNS. Formato correto (sem espaço entre aspas):
+`"primeira_parte_com_255_chars" "segunda_parte_restante"`
+O DNS concatena automaticamente. Alguns painéis exigem que cada parte tenha suas próprias aspas.
+
+---
+
+## 6. DEBUGGING E DIAGNÓSTICO
 
 ### ✅ O que funciona
 
@@ -225,9 +275,15 @@ API não sobe. nginx retorna 502. Nada indica o enum.
 **Regra derivada:** `docker compose logs api --tail 50` é o **primeiro** comando
 após qualquer 502. Sempre. Antes de tocar nginx, antes de tocar qualquer outra coisa.
 
+**Conta com `email_verificado = FALSE` causa 401 no login sem mensagem clara.**
+Após registro, se o e-mail de verificação não chega (ex: RESEND_API_KEY ausente),
+a conta existe no banco mas não pode fazer login. O usuário não entende por quê.
+**Regra derivada:** ao investigar "registro funcionou mas login dá erro":
+`SELECT email, email_verificado, ativo FROM users WHERE email = '...'` é o primeiro passo.
+
 ---
 
-## 6. PROCESSO DE TRABALHO COM CLAUDE CODE
+## 7. PROCESSO DE TRABALHO COM CLAUDE CODE
 
 ### ✅ O que funciona
 
@@ -248,6 +304,11 @@ Custo: trabalho baseado em premissa falsa.
 **Regra derivada:** antes de afirmar que um arquivo está ausente, perguntar.
 Antes de afirmar qualquer conteúdo de arquivo, ler o arquivo.
 
+**Dev sênior antevê problemas antes de pedir para o PO testar.**
+Pedir ao usuário para testar antes de checar o schema do banco, os logs e o estado do ambiente
+gera frustração e ruído desnecessário. O ciclo correto é: diagnosticar → corrigir → confirmar
+internamente → só então pedir validação ao PO.
+
 ### ❌ O que causou problemas
 
 **Prompts com mais de 300 linhas aumentam risco de alucinação e desvio de escopo.**
@@ -263,7 +324,7 @@ deve ser precedida de leitura direta.
 
 ---
 
-## 7. SEGURANÇA
+## 8. SEGURANÇA
 
 ### ✅ O que funciona
 
@@ -274,6 +335,11 @@ Sem fallback, a segurança não degrada silenciosamente.
 **Rate limit (slowapi) e validação de MIME no upload.**
 SEC-06 e SEC-07 eliminaram dois vetores de abuso sem custo operacional relevante.
 Implementar cedo é mais barato que remediar após incidente.
+
+**Validação de senha forte no backend (Pydantic) e no frontend (Zod).**
+Validação dupla: o Zod informa o usuário em tempo real (checklist visual),
+o `@field_validator` no Pydantic garante que nenhuma senha fraca passe mesmo via API direta.
+Regra: validação de segurança crítica sempre no backend, frontend é UX auxiliar.
 
 ### ❌ O que causou problemas
 
@@ -290,7 +356,7 @@ Não existe "lançar e ativar depois". Ativar antes do lançamento.
 
 ---
 
-## 8. DECISÕES ARQUITETURAIS QUE NÃO DEVEM SER QUESTIONADAS NOVAMENTE
+## 9. DECISÕES ARQUITETURAIS QUE NÃO DEVEM SER QUESTIONADAS NOVAMENTE
 
 Estas decisões foram tomadas com análise formal (matriz de avaliação) e
 estão registradas em ESP-15. Reabrir sem evidência nova é desperdício de ciclo.
@@ -305,19 +371,21 @@ estão registradas em ESP-15. Reabrir sem evidência nova é desperdício de cic
 | Embedding model | voyage-3 | Quando RDM-015 (Embedding Refresh) for implementado |
 | GraphRAG completo | EXCLUÍDO (RDM-026 descartado) | Não reabrir — RAR (RDM-031) cobre o essencial |
 | LangChain / LangGraph | EXCLUÍDO | Não reabrir antes da Onda 3+ |
+| E-mail transacional | Resend | Não revisar antes de atingir limites de volume |
+| Billing | Asaas | Não revisar antes de fechar primeiro contrato pagante |
 
 ---
 
-## 9. DÉBITOS ABERTOS — MONITORAR ATIVAMENTE
+## 10. DÉBITOS ABERTOS — MONITORAR ATIVAMENTE
 
 Estes itens não foram resolvidos e têm risco crescente com o tempo.
 Atualizar esta tabela quando um item for fechado.
 
 | # | Débito | Risco | Gatilho para resolver |
 |---|---|---|---|
-| ~~D-01~~ | ~~SEC-09: BYPASS_AUTH=False~~ | ~~Segurança crítica em produção~~ | ✅ **Fechado Abril 2026** — FastAPI ativo não tem BYPASS_AUTH. Zero UUIDs renomeados para `_NULL_USER_SENTINEL` |
-| ~~D-02~~ | ~~Backup automatizado do `taxmind_pgdata`~~ | ~~Perda irreversível de dados~~ | ✅ **Fechado Abril 2026** — `scripts/backup_db.sh` criado: pg_dump diário comprimido, retenção 7 backups, cron 03h00 no VPS. Expandível para S3. |
-| D-03 | SEC-10: IDs sequenciais → UUID em cases/outputs | Enumeração e segurança | ⚠️ **Abril 2026** — migration `118_uuid_cases_outputs.sql` criada e testada (dry-run com ROLLBACK OK). Partes 1+2 validadas. Parte 3 (swap PK/FK) requer aprovação do PO + janela de manutenção + alterações de código em API e frontend. |
+| ~~D-01~~ | ~~SEC-09: BYPASS_AUTH=False~~ | ~~Segurança crítica em produção~~ | ✅ **Fechado Abril 2026** — FastAPI ativo não tem BYPASS_AUTH |
+| ~~D-02~~ | ~~Backup automatizado do `taxmind_pgdata`~~ | ~~Perda irreversível de dados~~ | ✅ **Fechado Abril 2026** — `scripts/backup_db.sh` criado |
+| D-03 | SEC-10: IDs sequenciais → UUID em cases/outputs | Enumeração e segurança | ⚠️ Migration 118 criada e dry-run validado. Parte 3 (swap PK/FK) requer janela de manutenção + aprovação do PO |
 | D-04 | Corpus Manager sem responsável formal | Desatualização silenciosa do corpus | Ao atingir 10 clientes pagantes |
 | D-05 | Tab Consultar com resposta mais rasa que Protocolo | Qualidade inconsistente | Aplicar PROMPT_DIAGNOSTICO antes do lançamento |
 | D-06 | Billing Asaas produção não contratado | Monetização bloqueada | Antes de aceitar primeiro pagamento |
@@ -326,7 +394,7 @@ Atualizar esta tabela quando um item for fechado.
 
 ---
 
-## 10. O QUE ESTE PROJETO DEMONSTROU
+## 11. O QUE ESTE PROJETO DEMONSTROU
 
 **O maior diferencial de produtividade em operação solo é:**
 rigor conceitual antes de qualquer execução + diagnóstico preciso antes de qualquer correção.
@@ -344,7 +412,7 @@ O corpus desatualizado, sim.
 ## ATUALIZAÇÃO DESTE ARQUIVO
 
 Atualizar sempre que:
-- Um débito da Seção 9 for fechado (marcar como ✅ e registrar a data)
+- Um débito da Seção 10 for fechado (marcar como ✅ e registrar a data)
 - Um incidente de produção gerar nova lição
 - Uma decisão arquitetural for revertida (documentar por que)
 - Um novo padrão de trabalho for estabelecido

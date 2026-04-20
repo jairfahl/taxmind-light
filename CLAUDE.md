@@ -1,5 +1,5 @@
 # Orbis.tax — Instruções para Claude Code
-**Versão:** 2.3 | **Atualizado em:** Abril 2026
+**Versão:** 2.5 | **Atualizado em:** Abril 2026
 
 > Este arquivo é lido automaticamente pelo Claude Code a cada sessão.
 > Não remover. Atualizar sempre que houver decisões arquiteturais novas.
@@ -54,10 +54,12 @@ Só prosseguir após concluir os 3 passos acima.
 7. **Secrets via variável de ambiente** — nunca hardcoded
 8. **Nova feature que toca o banco: começar pela migration** — sempre
 9. **NUNCA copiar os PDFs para dentro de /downloads/tribus-ai-light/**
+10. **Cores de texto no frontend: NUNCA usar `style={{ color: "#..." }}` hardcoded** — usar `text-foreground`, `text-muted-foreground` ou outra classe Tailwind semântica que respeite o dark mode via CSS vars
+11. **Componentes com `useSearchParams()`: SEMPRE envolver em `<Suspense>`** — obrigatório no Next.js 16 para SSG
 
 ### Após implementar
-10. **Rodar suite completa:** `.venv/bin/python -m pytest tests/ -v --tb=short`
-11. **Zero regressões toleradas** — se um teste quebrou, corrigir antes de entregar
+12. **Rodar suite completa:** `.venv/bin/python -m pytest tests/ -v --tb=short`
+13. **Zero regressões toleradas** — se um teste quebrou, corrigir antes de entregar
 
 ---
 
@@ -71,6 +73,8 @@ Só prosseguir após concluir os 3 passos acima.
 | Voyage-3 (embeddings) | ChromaDB / FAISS / Pinecone |
 | Claude Sonnet 4.6 (LLM padrão) | Qualquer ORM |
 | Docker, psycopg2 direto, Zustand, axios | Streamlit (legado) |
+| Resend (e-mail transacional) | SendGrid, Mailchimp |
+| Asaas (billing — sandbox ativo) | Stripe, PagSeguro |
 
 ### Convenções Next.js (OBRIGATÓRIO ler antes de tocar o frontend)
 - **App Router:** grupos `(app)` e `(auth)` — o prefixo do grupo NÃO aparece na URL
@@ -79,6 +83,7 @@ Só prosseguir após concluir os 3 passos acima.
 - **API calls:** sempre via `@/lib/api` (axios com interceptors de `Authorization` e `X-Api-Key`)
 - **Auth:** `useAuthStore` (Zustand + localStorage persist) — nunca acessar DB no cliente
 - **Standalone output:** `outputFileTracingRoot: path.join(__dirname)` obrigatório em `next.config.ts`
+- **`useSearchParams()`:** exige `<Suspense>` no componente pai — sem isso o build `next build` falha
 
 ### Convenções de Design (OBRIGATÓRIO)
 - **Tokens:** `frontend/src/styles/tokens.css` é a fonte de verdade para cores e tipografia
@@ -89,6 +94,7 @@ Só prosseguir após concluir os 3 passos acima.
 - **Logo:** `public/logo-dark.png` (sidebar/login escuro) + `public/logo.png` (fundos claros) — wordmark ORBIS.TAX na landing
 - **Card.tsx:** prop `clickable` ativa hover lift; sem prop = apenas sombra estática
 - **AnalysisLoading:** componente `"use client"` — depende de `useEffect` para mensagens rotativas
+- **Texto adaptável ao tema:** usar `text-foreground` / `text-muted-foreground` — nunca `style={{ color: "#..." }}` para texto de conteúdo
 
 ---
 
@@ -164,8 +170,8 @@ padroes_uso           -- frequência de temas por usuário (G25)
 sugestoes_silenciadas -- silenciamentos de sugestões proativas
 
 -- Auth e billing
-tenants               -- tenants com plano, trial e status de pagamento
-users                 -- usuários + perfil onboarding (migration 117)
+tenants               -- tenants com plano, trial, status de pagamento + desconto_percentual (migration 124)
+users                 -- usuários + perfil onboarding + lgpd_consent + email_verificado + email_token (migration 119-123)
 mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 ```
 
@@ -190,7 +196,7 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 | Onda C — P6 + Monitoramento + Aprendizado Institucional | ✅ |
 | Onda D — Criticidade (G17) + MAU Metering (G26) + Proatividade (G25) | ✅ |
 | Auditoria de código — pool unificado, credenciais sem fallback | ✅ |
-| GTM A — WhatsApp CTA na landing page (DEC-11) | ✅ |
+| GTM A — WhatsApp CTA na landing page (DEC-11) + pulse animation | ✅ |
 | GTM D — Badge "Memória de Decisão" na UI do Dossiê | ✅ |
 | GTM E — Qualificação de tenant via progressive profiling (3 steps) | ✅ |
 | **Migração UI: Streamlit → Next.js 16 (P01–P20)** | ✅ |
@@ -211,18 +217,26 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 | **UI Upgrade — PainelGovernança Shield + BadgeCriticidade + Card sombra** | ✅ |
 | **UI Upgrade — Botão gradiente + inputs focus accent + slider** | ✅ |
 | **UI Upgrade — Layout mobile hamburguer + Logo dark v1** | ✅ |
-| **Gate U2** | ⏳ Pendente |
+| **UI Upgrade — /assinar dark mode fix (text-foreground / text-muted-foreground)** | ✅ |
 | **Deploy VPS Hostinger** | ✅ Produção no ar — https://orbis.tax |
-| **SEC-09 BYPASS_AUTH=False** | ✅ Confirmado: FastAPI ativo não tem BYPASS_AUTH. Zero UUIDs renomeados para _NULL_USER_SENTINEL (sentinela de integridade DB, não auth bypass) |
-| **SEC-10 IDs sequenciais → UUID (cases/outputs)** | ⏳ Pendente (requer migration + backup) |
-| **Fix produção — landing page raiz (route.ts + landing-page.html não commitados)** | ✅ Corrigido 2026-04-15 |
+| **SEC-09 BYPASS_AUTH=False** | ✅ Confirmado: FastAPI ativo não tem BYPASS_AUTH |
+| **SEC-10 IDs sequenciais → UUID (cases/outputs)** | ⏳ Pendente — migration 118 criada e dry-run validado; swap PK/FK requer janela de manutenção |
+| **Fix produção — landing page raiz (route.ts + landing-page.html)** | ✅ Corrigido 2026-04-15 |
+| **Fluxo de cadastro completo** | ✅ /register → Resend email → /verify-email → /analisar |
+| **Validação senha forte** | ✅ Zod (frontend) + Pydantic @field_validator (backend): 8+ chars, maiúsc, minúsc, número, especial |
+| **E-mail transacional — Resend** | ✅ Domínio orbis.tax verificado, DKIM configurado, RESEND_API_KEY em .env.prod |
+| **Asaas billing integrado** | ✅ /assinar + /v1/billing/subscribe + webhook — sandbox ativo |
+| **Admin mailing page** | ✅ Filtros trial/convertido/cancelado, exportação CSV, desconto inline por tenant |
+| **Landing page trust signals** | ✅ "1.596 normas indexadas · 3 leis-base curadas · Auditável P1→P6" |
+| **redeploy.sh no repositório** | ✅ Script com branding Orbis.tax, versionado no git |
+| **Migrations 119–124 aplicadas em prod** | ✅ lgpd_consent, documento, marketing_consent, onboarding_varchar, session_id, desconto_percentual |
+| **Gate U2** | ⏳ Pendente |
 
-- **Suite de testes backend:** 667 passando, 5 falhas conhecidas pré-existentes (referência 2026-04-15)
+- **Suite de testes backend:** 667+ passando, 5 falhas conhecidas pré-existentes (referência 2026-04-15; novos testes de simuladores adicionados)
 - **Novos testes de integração:** test_auth_endpoints, test_simuladores_endpoints, test_protocol_endpoints, test_analyze_endpoint, test_multi_tenant_isolation, test_observability_api_new, test_admin_monitor, test_db_integrity
-- **Última migration:** `117_onboarding_profile.sql`
+- **Última migration:** `124_tenant_desconto.sql`
 - **Domínios registrados:** orbis.tax / tribus-ai.com.br / tribus-ia.com.br
 - **slowapi:** já está em `requirements.txt` — incluído no build Docker automaticamente
-- **VOYAGE_API_KEY ativa:** `pa-GA8lfUZKLFS_9Xv3Xoh01cPJdKqsagDAivrqcJ5jsPG`
 
 ---
 
@@ -238,6 +252,8 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 - **Admin padrão:** `admin@orbis.tax` / `Admin2026`
 - **LOCKFILE_MODE no .env.prod:** deve ser `WARN` (não `ENFORCE` — valor inválido)
 - **ASAAS_API_KEY no .env.prod:** deve iniciar com `$$` (não `$`) para escape do docker compose
+- **RESEND_API_KEY no .env.prod:** obrigatória para e-mail de verificação de cadastro
+- **Após alterar .env.prod:** `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --force-recreate api` — NUNCA usar `restart` (não relê variáveis)
 - **Fix de senha via container:** `docker exec -i tribus-ai-api python3 < /tmp/fix_hash.py`
 
 ---
@@ -271,13 +287,15 @@ LOCKFILE_MODE válido, e ausência de secrets hardcoded em src/.
 ```bash
 # Verificar última migration
 ls /Users/jairfahl/Downloads/tribus-ai-light/migrations/ | sort | tail -5
-# Última: 100_users_table.sql → próxima: 101_descricao.sql
+# Última: 124_tenant_desconto.sql → próxima: 125_descricao.sql
 
 # Executar migration
 docker exec -i tribus-ai-db \
     psql -U taxmind -d taxmind_db \
     < /Users/jairfahl/Downloads/tribus-ai-light/migrations/NNN_descricao.sql
 ```
+
+**REGRA:** qualquer ALTER TABLE executado diretamente no banco **DEVE** ter arquivo migration correspondente criado e commitado imediatamente.
 
 ---
 
@@ -310,3 +328,4 @@ Atualizar sempre que:
 - Estado de uma entrega mudar (⏳ → ✅)
 - Uma regra permanente for adicionada
 - O número de referência da suite de testes mudar
+- Uma nova env var obrigatória for adicionada
