@@ -15,7 +15,7 @@ const CLASSES: Record<string, { emoji: string; label: string }> = {
 const LEGAL_HOLD_CLASSES = new Set(["dossie_decisao", "recomendacao_formal", "material_compartilhavel"]);
 
 interface CaseRow {
-  case_id: number;
+  case_id: string;
   titulo: string;
   status: string;
   passo_atual: number;
@@ -23,8 +23,8 @@ interface CaseRow {
 }
 
 interface OutputRow {
-  id: number;
-  case_id: number;
+  id: string;
+  case_id: string;
   classe: string;
   titulo: string;
   conteudo: string | Record<string, unknown> | null;

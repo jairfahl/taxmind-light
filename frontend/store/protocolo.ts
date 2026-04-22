@@ -4,7 +4,7 @@ import type { ResultadoAnalise } from "@/types";
 interface ProtocoloState {
   // Controle
   stepAtual: number;
-  caseId: number | null;
+  caseId: string | null;
   interactionId: string | null;
   // P1
   query: string;

@@ -1077,27 +1077,27 @@ def listar_casos():
 
 
 @app.get("/v1/cases/{case_id}", dependencies=[Depends(verificar_token_api)])
-def get_caso(case_id: int):
+def get_caso(case_id: str):
     """Retorna o estado completo do caso com histórico."""
-    logger.info("GET /v1/cases/%d", case_id)
+    logger.info("GET /v1/cases/%s", case_id)
     try:
         estado = _protocol_engine.get_estado(case_id)
     except ProtocolError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error("Erro em GET /v1/cases/%d: %s", case_id, e, exc_info=True)
+        logger.error("Erro em GET /v1/cases/%s: %s", case_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return _case_estado_to_dict(estado)
 
 
 @app.post("/v1/cases/{case_id}/steps/{passo}", dependencies=[Depends(verificar_token_api)])
-def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
+def submeter_passo(case_id: str, passo: int, req: SubmeterPassoRequest):
     """
     Submete dados de um passo e avança/retrocede o protocolo.
     No Step 5 (Decidir), executa DetectorCarimbo automaticamente se dados contiverem
     'decisao_final' e 'recomendacao'.
     """
-    logger.info("POST /v1/cases/%d/steps/%d acao=%s", case_id, passo, req.acao)
+    logger.info("POST /v1/cases/%s/steps/%d acao=%s", case_id, passo, req.acao)
     try:
         if req.acao == "voltar":
             step = _protocol_engine.voltar(case_id, passo)
@@ -1156,14 +1156,14 @@ def submeter_passo(case_id: int, passo: int, req: SubmeterPassoRequest):
     except ProtocolError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        logger.error("Erro em POST /v1/cases/%d/steps/%d: %s", case_id, passo, e, exc_info=True)
+        logger.error("Erro em POST /v1/cases/%s/steps/%d: %s", case_id, passo, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
 
 @app.post("/v1/cases/{case_id}/carimbo/confirmar", dependencies=[Depends(verificar_token_api)])
-def confirmar_carimbo(case_id: int, req: ConfirmarCarimboRequest):
+def confirmar_carimbo(case_id: str, req: ConfirmarCarimboRequest):
     """Confirma alerta de carimbo com justificativa do gestor (mín. 20 chars)."""
-    logger.info("POST /v1/cases/%d/carimbo/confirmar alert_id=%d", case_id, req.alert_id)
+    logger.info("POST /v1/cases/%s/carimbo/confirmar alert_id=%d", case_id, req.alert_id)
     try:
         _carimbo_detector.confirmar(req.alert_id, req.justificativa)
     except CarimboConfirmacaoError as e:
@@ -1181,7 +1181,7 @@ def confirmar_carimbo(case_id: int, req: ConfirmarCarimboRequest):
 # ---------------------------------------------------------------------------
 
 class GerarOutputRequest(BaseModel):
-    case_id: int
+    case_id: str
     classe: str = Field(..., description="alerta|nota_trabalho|recomendacao_formal|dossie_decisao|material_compartilhavel")
     stakeholders: Optional[list[str]] = Field(None, description="Lista de stakeholder_tipo")
     # Para alerta (C1)
@@ -1191,7 +1191,7 @@ class GerarOutputRequest(BaseModel):
     # Para C2/C3 — AnaliseResult embutido
     query: Optional[str] = None
     # Para C5 — base output_id
-    output_base_id: Optional[int] = None
+    output_base_id: Optional[str] = None
     # Para C2/C3 — modelo a usar na análise
     model: str = Field(MODEL_DEV)
     user_id: Optional[str] = Field(None, description="UUID do usuário autenticado (tenant isolation)")
@@ -1244,7 +1244,7 @@ def gerar_output(req: GerarOutputRequest):
     - C4 (dossie_decisao): requer Step 5 (Decidir) concluído no caso
     - C5 (material_compartilhavel): requer output_base_id com C3/C4 aprovado
     """
-    logger.info("POST /v1/outputs case_id=%d classe=%s", req.case_id, req.classe)
+    logger.info("POST /v1/outputs case_id=%s classe=%s", req.case_id, req.classe)
 
     try:
         classe = OutputClass(req.classe)
@@ -1324,9 +1324,9 @@ def gerar_output(req: GerarOutputRequest):
 
 
 @app.get("/v1/outputs/{output_id}", dependencies=[Depends(verificar_token_api)])
-def get_output(output_id: int):
+def get_output(output_id: str):
     """Retorna output completo com views por stakeholder."""
-    logger.info("GET /v1/outputs/%d", output_id)
+    logger.info("GET /v1/outputs/%s", output_id)
     try:
         from src.outputs.engine import _load_output
         conn = get_conn()
@@ -1337,18 +1337,18 @@ def get_output(output_id: int):
     except OutputError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error("Erro em GET /v1/outputs/%d: %s", output_id, e, exc_info=True)
+        logger.error("Erro em GET /v1/outputs/%s: %s", output_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return _output_result_to_dict(result)
 
 
 @app.post("/v1/outputs/{output_id}/aprovar", dependencies=[Depends(verificar_token_api)])
-def aprovar_output(output_id: int, req: AprovarOutputRequest):
+def aprovar_output(output_id: str, req: AprovarOutputRequest):
     """
     Aprova um output. Status gerado → aprovado.
     C3 e C5 exigem aprovação antes de publicação.
     """
-    logger.info("POST /v1/outputs/%d/aprovar por=%s", output_id, req.aprovado_por)
+    logger.info("POST /v1/outputs/%s/aprovar por=%s", output_id, req.aprovado_por)
     try:
         result = _output_engine.aprovar(
             output_id=output_id,
@@ -1364,13 +1364,13 @@ def aprovar_output(output_id: int, req: AprovarOutputRequest):
 
 
 @app.get("/v1/cases/{case_id}/outputs", dependencies=[Depends(verificar_token_api)])
-def listar_outputs_caso(case_id: int):
+def listar_outputs_caso(case_id: str):
     """Lista todos os outputs de um caso, ordenados por materialidade DESC."""
-    logger.info("GET /v1/cases/%d/outputs", case_id)
+    logger.info("GET /v1/cases/%s/outputs", case_id)
     try:
         outputs = _output_engine.listar_por_caso(case_id)
     except Exception as e:
-        logger.error("Erro em GET /v1/cases/%d/outputs: %s", case_id, e, exc_info=True)
+        logger.error("Erro em GET /v1/cases/%s/outputs: %s", case_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return [_output_result_to_dict(r) for r in outputs]
 

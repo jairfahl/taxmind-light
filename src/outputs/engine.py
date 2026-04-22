@@ -61,8 +61,8 @@ class OutputError(ValueError):
 
 @dataclass
 class OutputResult:
-    id: int
-    case_id: int
+    id: str
+    case_id: str
     passo_origem: int
     classe: OutputClass
     status: OutputStatus
@@ -88,7 +88,7 @@ def _assert_disclaimer(disclaimer: str) -> None:
 
 def _insert_output(
     conn,
-    case_id: int,
+    case_id: str,
     passo_origem: int,
     classe: OutputClass,
     titulo: str,
@@ -97,7 +97,7 @@ def _insert_output(
     disclaimer: str,
     versao_prompt: Optional[str],
     versao_base: Optional[str],
-) -> int:
+) -> str:
     _assert_disclaimer(disclaimer)
     imutavel = classe in (OutputClass.DOSSIE_DECISAO, OutputClass.MATERIAL_COMPARTILHAVEL)
     cur = conn.cursor()
@@ -116,11 +116,11 @@ def _insert_output(
     output_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
-    logger.info("Output criado: id=%d case_id=%d classe=%s", output_id, case_id, classe.value)
+    logger.info("Output criado: id=%s case_id=%s classe=%s", output_id, case_id, classe.value)
     return output_id
 
 
-def _load_output(conn, output_id: int) -> OutputResult:
+def _load_output(conn, output_id: str) -> OutputResult:
     cur = conn.cursor()
     cur.execute(
         """
@@ -173,7 +173,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def gerar_alerta(
         self,
-        case_id: int,
+        case_id: str,
         passo: int,
         titulo: str,
         contexto: str,
@@ -206,7 +206,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def gerar_nota_trabalho(
         self,
-        case_id: int,
+        case_id: str,
         analise_result: AnaliseResult,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
@@ -260,7 +260,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def gerar_recomendacao_formal(
         self,
-        case_id: int,
+        case_id: str,
         analise_result: AnaliseResult,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
@@ -310,7 +310,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def gerar_dossie(
         self,
-        case_id: int,
+        case_id: str,
         stakeholders: Optional[list[StakeholderTipo]] = None,
     ) -> OutputResult:
         """
@@ -380,7 +380,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def gerar_material_compartilhavel(
         self,
-        output_id: int,
+        output_id: str,
         stakeholders: list[StakeholderTipo],
     ) -> OutputResult:
         """
@@ -440,7 +440,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     def aprovar(
         self,
-        output_id: int,
+        output_id: str,
         aprovado_por: str,
         observacao: Optional[str] = None,
     ) -> OutputResult:
@@ -474,7 +474,7 @@ class OutputEngine:
             )
             conn.commit()
             cur.close()
-            logger.info("Output aprovado: id=%d por=%s", output_id, aprovado_por)
+            logger.info("Output aprovado: id=%s por=%s", output_id, aprovado_por)
             return _load_output(conn, output_id)
         finally:
             put_conn(conn)
@@ -482,7 +482,7 @@ class OutputEngine:
     # ------------------------------------------------------------------
     # Listar por caso
     # ------------------------------------------------------------------
-    def listar_por_caso(self, case_id: int) -> list[OutputResult]:
+    def listar_por_caso(self, case_id: str) -> list[OutputResult]:
         """Lista todos os outputs de um caso, ordenados por materialidade DESC."""
         conn = _get_conn()
         try:

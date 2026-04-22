@@ -27,7 +27,7 @@ export function P1Classificacao() {
     setLoading(true);
     setErro("");
     try {
-      const res = await api.post<{ case_id: number; status: string; passo_atual: number }>(
+      const res = await api.post<{ case_id: string; status: string; passo_atual: number }>(
         "/v1/cases",
         { titulo: query.slice(0, 120), descricao: query, contexto_fiscal: query }
       );

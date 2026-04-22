@@ -67,7 +67,7 @@ class ProtocolError(ValueError):
 
 @dataclass
 class CaseStep:
-    case_id: int
+    case_id: str
     passo: int
     dados: dict
     concluido: bool
@@ -76,7 +76,7 @@ class CaseStep:
 
 @dataclass
 class CaseEstado:
-    case_id: int
+    case_id: str
     titulo: str
     status: str
     passo_atual: int
@@ -112,7 +112,7 @@ def _validar_dados_passo(passo: int, dados: dict) -> None:
 
 def _registrar_historico(
     cur,
-    case_id: int,
+    case_id: str,
     status_de: Optional[str],
     status_para: str,
     passo_de: Optional[int],
@@ -141,7 +141,7 @@ class ProtocolStateEngine:
         contexto_fiscal: str,
         premissas: Optional[list] = None,
         periodo_fiscal: str = "",
-    ) -> int:
+    ) -> str:
         """Cria um novo caso em Passo 1/rascunho. Retorna case_id."""
         conn = _get_conn()
         try:
@@ -165,7 +165,7 @@ class ProtocolStateEngine:
             _registrar_historico(cur, case_id, None, "rascunho", None, 1, "Caso criado")
             conn.commit()
             cur.close()
-            logger.info("Caso criado: id=%d titulo=%s", case_id, titulo)
+            logger.info("Caso criado: id=%s titulo=%s", case_id, titulo)
             return case_id
         finally:
             put_conn(conn)
@@ -173,7 +173,7 @@ class ProtocolStateEngine:
     # ------------------------------------------------------------------
     # Avanço de passo
     # ------------------------------------------------------------------
-    def avancar(self, case_id: int, passo_atual: int, dados: dict) -> CaseStep:
+    def avancar(self, case_id: str, passo_atual: int, dados: dict) -> CaseStep:
         """
         Conclui passo_atual com dados e avança para o próximo passo.
         Valida pré-condições (incluindo Passo 4 → Passo 5) antes de avançar.
@@ -209,7 +209,7 @@ class ProtocolStateEngine:
                 cur.close()
             finally:
                 put_conn(conn)
-            logger.info("Caso %d: Passo 6 concluído e arquivado", case_id)
+            logger.info("Caso %s: Passo 6 concluído e arquivado", case_id)
             return CaseStep(case_id=case_id, passo=passo_atual, dados=dados,
                             concluido=True, proximo_passo=None)
 
@@ -258,14 +258,14 @@ class ProtocolStateEngine:
         finally:
             put_conn(conn)
 
-        logger.info("Caso %d: Passo %d → Passo %d", case_id, passo_atual, proximo)
+        logger.info("Caso %s: Passo %d → Passo %d", case_id, passo_atual, proximo)
         return CaseStep(case_id=case_id, passo=proximo, dados={}, concluido=False,
                         proximo_passo=TRANSICOES_VALIDAS[proximo][0] if TRANSICOES_VALIDAS[proximo] else None)
 
     # ------------------------------------------------------------------
     # Voltar passo
     # ------------------------------------------------------------------
-    def voltar(self, case_id: int, passo_atual: int) -> CaseStep:
+    def voltar(self, case_id: str, passo_atual: int) -> CaseStep:
         """Retrocede ao passo anterior (quando permitido pelas transições)."""
         proximos = TRANSICOES_VALIDAS.get(passo_atual, [])
         if len(proximos) < 2:
@@ -297,7 +297,7 @@ class ProtocolStateEngine:
     # ------------------------------------------------------------------
     # Estado completo do caso
     # ------------------------------------------------------------------
-    def get_estado(self, case_id: int) -> CaseEstado:
+    def get_estado(self, case_id: str) -> CaseEstado:
         conn = _get_conn()
         try:
             cur = conn.cursor()
@@ -335,7 +335,7 @@ class ProtocolStateEngine:
     # ------------------------------------------------------------------
     # Verificação
     # ------------------------------------------------------------------
-    def pode_avancar(self, case_id: int, passo: int) -> tuple[bool, str]:
+    def pode_avancar(self, case_id: str, passo: int) -> tuple[bool, str]:
         """Retorna (True, '') ou (False, motivo)."""
         proximos = TRANSICOES_VALIDAS.get(passo, [])
         if not proximos:
@@ -348,7 +348,7 @@ class ProtocolStateEngine:
                 return False, str(e)
         return True, ""
 
-    def _verificar_p4_concluido(self, case_id: int) -> None:
+    def _verificar_p4_concluido(self, case_id: str) -> None:
         conn = _get_conn()
         try:
             cur = conn.cursor()

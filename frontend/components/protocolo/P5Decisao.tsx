@@ -17,7 +17,7 @@ interface CarimboResponse {
 }
 
 interface StepResponse {
-  case_id: number;
+  case_id: string;
   passo: number;
   concluido: boolean;
   proximo_passo: number | null;

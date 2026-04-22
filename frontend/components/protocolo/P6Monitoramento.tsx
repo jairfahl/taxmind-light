@@ -8,7 +8,7 @@ import { CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 
 interface CasoListado {
-  case_id: number;
+  case_id: string;
   titulo: string;
   status: string;
   passo_atual: number;
