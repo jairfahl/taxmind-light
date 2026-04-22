@@ -114,18 +114,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://orbis.tax",
-        "https://www.orbis.tax",
-        "https://tribus-ai.com.br",
-        "https://www.tribus-ai.com.br",
-        "https://tribus-ia.com.br",
-        "https://www.tribus-ia.com.br",
-        "http://localhost:8521",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-    ],
+    allow_origins=["https://orbis.tax", "http://localhost:8521", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
