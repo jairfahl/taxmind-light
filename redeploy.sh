@@ -9,13 +9,17 @@ RAIZ="$(cd "$(dirname "$0")" && pwd)"
 cd "$RAIZ"
 
 echo "==> Pulling latest code..."
-git pull origin main
+git fetch origin main
+git reset --hard origin/main
 
 echo "==> Building and restarting containers..."
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build api ui nginx
 
 echo "==> Waiting for startup..."
 sleep 15
+
+echo "==> Reloading nginx config..."
+docker exec tribus-ai-nginx nginx -t && docker exec tribus-ai-nginx nginx -s reload
 
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 
