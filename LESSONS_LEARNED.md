@@ -182,6 +182,19 @@ Mensagem de erro explícita no boot vale mais que horas de debug.
 
 ## 4. DEPLOY E INFRAESTRUTURA
 
+### ❌ O que custou caro
+
+**VPS compartilhada entre projetos cria dependências ocultas no nginx.**
+O nginx do orbis.tax roda no mesmo VPS e mesmo container que o virameta.com.br.
+Esse fato não estava documentado. Ao tentar corrigir os redirects do tribus-ai.com.br,
+quase foi feito `git reset --hard` sobrescrevendo os blocos do virameta — o que derrubaria
+outro SaaS em produção. O erro foi evitado apenas porque o nginx.conf do VPS foi lido
+*antes* de executar. Qualquer sessão anterior que não lesse o arquivo teria causado o incidente.
+**Regra derivada:** antes de qualquer operação em nginx/docker no VPS, ler o estado real
+do servidor (`cat nginx.conf`, `docker ps`, `git status`) — nunca assumir que o VPS
+reflete o repositório. Projetos compartilhando infraestrutura DEVEM estar documentados
+no ARCHITECTURE.md com nota explícita de risco.
+
 ### ✅ O que funciona
 
 **Scripts são superiores a comandos manuais em produção.**
