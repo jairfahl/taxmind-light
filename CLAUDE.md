@@ -239,7 +239,6 @@ mau_records           -- Monthly Active Users por tenant/mês (DEC-08)
 | **Register: asteriscos + SenhaRequisitos** | ✅ Asteriscos em todos os campos obrigatórios; checklist de senha sempre visível |
 | **OnboardingModal: catch block + feedback de erro** | ✅ Errors de API agora exibem mensagem ao usuário em vez de travar silenciosamente |
 | **email_service.py: enviar_email_recuperacao_senha** | ✅ Template HTML com link /redefinir-senha?token= e validade de 1 hora |
-| **Gate U2** | ⏳ Pendente |
 
 - **Suite de testes backend:** 667+ passando, 5 falhas conhecidas pré-existentes (referência 2026-04-15; novos testes de simuladores adicionados)
 - **Novos testes de integração:** test_auth_endpoints, test_simuladores_endpoints, test_protocol_endpoints, test_analyze_endpoint, test_multi_tenant_isolation, test_observability_api_new, test_admin_monitor, test_db_integrity
