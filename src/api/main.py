@@ -2487,10 +2487,14 @@ def billing_subscribe(req: SubscribeRequest):
                 (asaas_customer_id, req.tenant_id),
             )
 
-        # Calcular valor com desconto
-        valor_base  = 497.00
+        # Calcular valor com desconto comercial do tenant
+        valor_base   = 497.00
         desconto_pct = float(desconto or 0)
-        valor_final = round(valor_base * (1 - desconto_pct / 100), 2)
+        valor_final  = round(valor_base * (1 - desconto_pct / 100), 2)
+
+        # Desconto promocional: R$ 297 nos 2 primeiros meses → desconto de R$ 200 por 2 ciclos
+        desconto_promo_valor  = round(valor_final - 297.00, 2) if valor_final > 297.00 else None
+        desconto_promo_ciclos = 2 if desconto_promo_valor and desconto_promo_valor > 0 else None
 
         # Criar assinatura
         assinatura = criar_assinatura(
@@ -2499,6 +2503,8 @@ def billing_subscribe(req: SubscribeRequest):
             plano="starter",
             valor=valor_final,
             billing_type=req.billing_type,
+            desconto_valor=desconto_promo_valor,
+            desconto_ciclos=desconto_promo_ciclos,
         )
         asaas_subscription_id = assinatura["id"]
 

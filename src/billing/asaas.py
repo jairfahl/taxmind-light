@@ -45,30 +45,40 @@ def criar_assinatura(
     valor: float,
     ciclo: str = "MONTHLY",
     billing_type: str = "CREDIT_CARD",
+    desconto_valor: Optional[float] = None,
+    desconto_ciclos: Optional[int] = None,
 ) -> dict:
     """
     Cria uma assinatura recorrente mensal no Asaas.
 
     Args:
-        customer_id : ID do customer no Asaas
-        tenant_id   : UUID do tenant (referência externa)
-        plano       : nome do plano ('starter', 'professional', 'enterprise')
-        valor       : valor mensal em reais (ex: 497.00) — já com desconto aplicado
-        ciclo       : periodicidade (default MONTHLY)
-        billing_type: forma de pagamento — "CREDIT_CARD" | "PIX" | "BOLETO"
+        customer_id    : ID do customer no Asaas
+        tenant_id      : UUID do tenant (referência externa)
+        plano          : nome do plano ('starter', 'professional', 'enterprise')
+        valor          : valor mensal cheio em reais (ex: 497.00)
+        ciclo          : periodicidade (default MONTHLY)
+        billing_type   : forma de pagamento — "CREDIT_CARD" | "PIX" | "BOLETO"
+        desconto_valor : desconto fixo em reais por ciclo (ex: 200.00)
+        desconto_ciclos: quantos ciclos o desconto se aplica (ex: 2)
 
     Retorna o objeto subscription com o campo 'id' (subscription_id Asaas).
     """
     from datetime import date
     payload = {
-        "customer":         customer_id,
-        "billingType":      billing_type,
-        "value":            valor,
-        "nextDueDate":      date.today().isoformat(),
-        "cycle":            ciclo,
-        "description":      f"Tribus-AI — Plano {plano.capitalize()}",
+        "customer":          customer_id,
+        "billingType":       billing_type,
+        "value":             valor,
+        "nextDueDate":       date.today().isoformat(),
+        "cycle":             ciclo,
+        "description":       f"Orbis.tax — Plano {plano.capitalize()}",
         "externalReference": tenant_id,
     }
+    if desconto_valor is not None and desconto_ciclos is not None:
+        payload["discount"] = {
+            "value":          desconto_valor,
+            "duracaoMeses":   desconto_ciclos,
+            "type":           "FIXED",
+        }
     resp = httpx.post(f"{ASAAS_BASE_URL}/subscriptions", json=payload, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
