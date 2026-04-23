@@ -76,10 +76,15 @@ export default function AssinarPage() {
 
       <Card>
         <div className="p-6">
-          {/* Preço */}
-          <div className="flex items-baseline gap-1 mb-6">
-            <span className="text-3xl font-extrabold text-foreground">R$ 497</span>
-            <span className="text-sm text-muted-foreground">/mês</span>
+          {/* Preço promocional */}
+          <div className="mb-6">
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-extrabold text-foreground">R$ 297</span>
+              <span className="text-sm text-muted-foreground">/mês</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              nos 2 primeiros meses — depois <span className="font-semibold text-foreground">R$ 497/mês</span>
+            </p>
           </div>
 
           {/* Benefícios */}
@@ -143,7 +148,7 @@ export default function AssinarPage() {
       <p className="text-center text-xs mt-6 text-muted-foreground">
         Dúvidas?{" "}
         <a
-          href="https://wa.me/5511999700215?text=Ol%C3%A1%2C+acessei+o+Orbis.tax+e+tenho+interesse+em+saber+mais+do+app."
+          href="https://wa.me/5511972521970?text=Ol%C3%A1%2C+acessei+o+Orbis.tax+e+tenho+interesse+em+saber+mais+do+app."
           target="_blank"
           rel="noopener noreferrer"
           className="underline"
