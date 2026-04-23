@@ -1698,6 +1698,12 @@ _ASAAS_STATUS_MAP = {
 }
 
 
+@app.get("/v1/webhooks/asaas")
+async def asaas_webhook_ping():
+    """Validação de conectividade do Asaas (GET health check)."""
+    return {"status": "ok"}
+
+
 @app.post("/v1/webhooks/asaas")
 async def asaas_webhook(request: Request):
     """
