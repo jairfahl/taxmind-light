@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useProtocoloStore } from "@/store/protocolo";
+import { useAuthStore } from "@/store/auth";
 import { Card } from "@/components/shared/Card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,7 @@ interface DriftAlert {
 
 export function P6Monitoramento() {
   const { caseId, query, set, setStep, reset } = useProtocoloStore();
+  const { user } = useAuthStore();
   const [resultadoReal, setResultadoReal] = useState("");
   const [aprendizado, setAprendizado] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,13 +35,14 @@ export function P6Monitoramento() {
   const [loadingCasos, setLoadingCasos] = useState(true);
   const [alertas, setAlertas] = useState<DriftAlert[]>([]);
 
-  // Carregar lista de casos ativos
+  // Carregar lista de casos ativos (filtrada pelo tenant do usuário)
   useEffect(() => {
-    api.get<CasoListado[]>("/v1/cases")
+    const params = user?.id ? `?user_id=${user.id}` : "";
+    api.get<CasoListado[]>(`/v1/cases${params}`)
       .then((r) => setCasos(r.data.filter((c) => c.status !== "encerrado").slice(0, 5)))
       .catch(() => setCasos([]))
       .finally(() => setLoadingCasos(false));
-  }, []);
+  }, [user?.id]);
 
   // Carregar alertas de monitoramento ativos
   useEffect(() => {

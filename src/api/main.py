@@ -880,12 +880,72 @@ def deletar_norma(norma_id: int):
         put_conn(conn)
 
 
+# --- Limites de casos por plano (migration 128) ---
+
+_CASE_LIMITS: dict[str, int] = {
+    "trial":        3,   # total durante o período de trial
+    "starter":      10,  # por mês calendário
+    "professional": 50,  # por mês calendário
+    "enterprise":   -1,  # ilimitado
+}
+
+
+def _get_tenant_info_by_user(user_id: str, conn):
+    """Retorna (tenant_id, subscription_status, plano, trial_ends_at) ou None."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT t.id, t.subscription_status, t.plano, t.trial_ends_at
+               FROM users u JOIN tenants t ON t.id = u.tenant_id
+               WHERE u.id = %s LIMIT 1""",
+            (user_id,),
+        )
+        return cur.fetchone()
+
+
+def _verificar_limite_casos(
+    tenant_id: str,
+    subscription_status: str,
+    plano: str,
+    trial_ends_at,
+    conn,
+) -> tuple:
+    """
+    Verifica se o tenant pode criar mais casos.
+
+    Returns:
+        (permitido: bool, usado: int, limite: int) — limite -1 = ilimitado
+    """
+    chave = "trial" if subscription_status == "trial" else (plano or "starter")
+    limite = _CASE_LIMITS.get(chave, _CASE_LIMITS["starter"])
+
+    if limite == -1:
+        return True, 0, -1
+
+    with conn.cursor() as cur:
+        if subscription_status == "trial":
+            cur.execute(
+                "SELECT COUNT(*) FROM cases WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+        else:
+            cur.execute(
+                """SELECT COUNT(*) FROM cases
+                   WHERE tenant_id = %s
+                     AND created_at >= date_trunc('month', NOW())""",
+                (tenant_id,),
+            )
+        usado = cur.fetchone()[0]
+
+    return usado < limite, usado, limite
+
+
 # --- Protocol schemas ---
 
 class CriarCasoRequest(BaseModel):
     titulo: str = Field(..., min_length=10, description="Título do caso (mín. 10 chars)")
     descricao: str = Field(..., min_length=1)
     contexto_fiscal: str = Field(..., min_length=1)
+    user_id: Optional[str] = Field(None, description="ID do usuário — necessário para rastreamento de tenant e verificação de limite")
 
 
 class SubmeterPassoRequest(BaseModel):
@@ -1022,55 +1082,135 @@ def registrar_decisao(req: RegistrarDecisaoRequest):
 
 @app.post("/v1/cases", status_code=201, dependencies=[Depends(verificar_token_api)])
 def criar_caso(req: CriarCasoRequest):
-    """Cria um novo caso protocolar em Step 1/rascunho."""
-    logger.info("POST /v1/cases titulo=%s", req.titulo[:60])
+    """Cria um novo caso protocolar em Step 1/rascunho. Verifica limite por plano quando user_id fornecido."""
+    logger.info("POST /v1/cases titulo=%s user_id=%s", req.titulo[:60], req.user_id)
+    conn = None
+    tenant_id = None
     try:
+        # Verificar limite se user_id fornecido
+        if req.user_id:
+            conn = get_conn()
+            row = _get_tenant_info_by_user(req.user_id, conn)
+            if row:
+                t_id, sub_status, plano, trial_ends = row
+                tenant_id = str(t_id)
+                permitido, usado, limite = _verificar_limite_casos(
+                    tenant_id, sub_status, plano, trial_ends, conn
+                )
+                if not permitido:
+                    limite_str = str(limite)
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            f"Limite de casos atingido ({usado}/{limite_str}). "
+                            "Faça upgrade do plano para criar mais casos."
+                        ),
+                    )
+            put_conn(conn)
+            conn = None
+
+        # Criar caso via protocol engine (faz commit internamente)
         case_id = _protocol_engine.criar_caso(
             titulo=req.titulo,
             descricao=req.descricao,
             contexto_fiscal=req.contexto_fiscal,
         )
+
+        # Vincular tenant_id ao caso recem criado
+        if tenant_id:
+            conn2 = get_conn()
+            try:
+                cur = conn2.cursor()
+                cur.execute("UPDATE cases SET tenant_id = %s WHERE id = %s", (tenant_id, case_id))
+                conn2.commit()
+                cur.close()
+            finally:
+                put_conn(conn2)
+
+        return {"case_id": case_id, "status": "rascunho", "passo_atual": 1}
+
+    except HTTPException:
+        raise
     except ProtocolError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("Erro em /v1/cases: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
-    return {"case_id": case_id, "status": "rascunho", "passo_atual": 1}
+    finally:
+        if conn:
+            put_conn(conn)
 
 
-@app.get("/v1/cases", dependencies=[Depends(verificar_token_api)])
-def listar_casos():
-    """Lista casos reais (exclui cases gerados por testes automatizados)."""
-    logger.info("GET /v1/cases")
+@app.get("/v1/cases/limite", dependencies=[Depends(verificar_token_api)])
+def get_limite_casos(user_id: str = Query(...)):
+    """Retorna quantos casos foram criados e qual o limite do plano atual."""
+    logger.info("GET /v1/cases/limite user_id=%s", user_id)
     conn = None
     try:
         conn = get_conn()
+        row = _get_tenant_info_by_user(user_id, conn)
+        if not row:
+            return {"usado": 0, "limite": 0, "plano": "starter", "subscription_status": "trial"}
+        t_id, sub_status, plano, trial_ends = row
+        tenant_id = str(t_id)
+        _, usado, limite = _verificar_limite_casos(tenant_id, sub_status, plano, trial_ends, conn)
+        return {
+            "usado": usado,
+            "limite": limite,
+            "plano": plano,
+            "subscription_status": sub_status,
+        }
+    except Exception as e:
+        logger.error("Erro em /v1/cases/limite: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+@app.get("/v1/cases", dependencies=[Depends(verificar_token_api)])
+def listar_casos(user_id: Optional[str] = Query(None)):
+    """Lista casos do tenant (filtrado por user_id quando fornecido). Exclui casos de testes."""
+    logger.info("GET /v1/cases user_id=%s", user_id)
+    conn = None
+    try:
+        conn = get_conn()
+
+        # Resolver tenant_id a partir do user_id
+        tenant_id = None
+        if user_id:
+            row = _get_tenant_info_by_user(user_id, conn)
+            if row:
+                tenant_id = str(row[0])
+
         cur = conn.cursor()
-        cur.execute(
-            """SELECT DISTINCT ON (titulo) id, titulo, status, passo_atual, created_at
-               FROM cases
-               WHERE titulo NOT ILIKE '%%teste%%'
-                 AND titulo NOT ILIKE '%%test%%'
-                 AND titulo NOT ILIKE '%%smoke%%'
-                 AND titulo NOT ILIKE '%%validar%%'
-                 AND titulo NOT ILIKE '%%bloqueio%%'
-                 AND titulo NOT ILIKE '%%invalido%%'
-                 AND titulo NOT ILIKE '%%retrocesso%%'
-                 AND titulo NOT ILIKE '%%avancar%%'
-                 AND titulo NOT ILIKE '%%voltar%%'
-                 AND titulo NOT ILIKE '%%submeter%%'
-                 AND titulo NOT ILIKE '%%integração%%'
-                 AND titulo NOT ILIKE '%%integracao%%'
-                 AND titulo NOT ILIKE '%%output ja%%'
-                 AND titulo NOT ILIKE '%%listar outputs%%'
-                 AND titulo NOT ILIKE '%%aprovacao%%'
-                 AND titulo NOT ILIKE '%%get estado%%'
-                 AND titulo NOT ILIKE '%%get output%%'
-               ORDER BY titulo, id DESC"""
-        )
+        exclusoes = [
+            "%%teste%%", "%%test%%", "%%smoke%%", "%%validar%%",
+            "%%bloqueio%%", "%%invalido%%", "%%retrocesso%%", "%%avancar%%",
+            "%%voltar%%", "%%submeter%%", "%%integração%%", "%%integracao%%",
+            "%%output ja%%", "%%listar outputs%%", "%%aprovacao%%",
+            "%%get estado%%", "%%get output%%",
+        ]
+        not_ilike_clauses = " ".join(f"AND titulo NOT ILIKE '{e}'" for e in exclusoes)
+
+        if tenant_id:
+            cur.execute(
+                f"""SELECT DISTINCT ON (titulo) id, titulo, status, passo_atual, created_at
+                   FROM cases
+                   WHERE tenant_id = %s
+                     {not_ilike_clauses}
+                   ORDER BY titulo, id DESC""",
+                (tenant_id,),
+            )
+        else:
+            cur.execute(
+                f"""SELECT DISTINCT ON (titulo) id, titulo, status, passo_atual, created_at
+                   FROM cases
+                   WHERE {not_ilike_clauses[4:]}
+                   ORDER BY titulo, id DESC"""
+            )
         rows = cur.fetchall()
         cur.close()
-        # Re-ordenar por id DESC (mais recente primeiro)
         rows.sort(key=lambda r: r[0], reverse=True)
         return [
             {

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useProtocoloStore } from "@/store/protocolo";
+import { useAuthStore } from "@/store/auth";
 import { Card } from "@/components/shared/Card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +16,7 @@ const METODOS_SUGERIDOS = [
 
 export function P1Classificacao() {
   const { query, metodos, topK, set, setStep } = useProtocoloStore();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -29,12 +31,17 @@ export function P1Classificacao() {
     try {
       const res = await api.post<{ case_id: string; status: string; passo_atual: number }>(
         "/v1/cases",
-        { titulo: query.slice(0, 120), descricao: query, contexto_fiscal: query }
+        { titulo: query.slice(0, 120), descricao: query, contexto_fiscal: query, user_id: user?.id ?? null }
       );
       set({ caseId: res.data.case_id });
       setStep(2);
-    } catch {
-      setErro("Erro ao criar o caso. Verifique a conexão com a API.");
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (detail?.includes("Limite de casos")) {
+        setErro(detail);
+      } else {
+        setErro("Erro ao criar o caso. Verifique a conexão com a API.");
+      }
     } finally {
       setLoading(false);
     }
