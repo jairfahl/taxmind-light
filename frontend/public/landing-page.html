@@ -1,1032 +1,1047 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Orbis.tax — Inteligência tributária para a Reforma. Protocolo cognitivo de 6 passos, base de normas atualizada e trilha de auditoria para decisões tributárias documentadas." />
-  <title>Orbis.tax — Inteligência Tributária para a Reforma</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <style>
-    /* ── Reset & Base ───────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbis.tax — Decisões tributárias documentadas, não opiniões de IA</title>
+<meta name="description" content="Protocolo cognitivo de 6 passos com base atualizada da Reforma Tributária. Cada análise cita a norma, indica grau de confiança e gera trilha de auditoria imutável.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1220;
+  --navy-2:#111827;
+  --navy-3:#1a2540;
+  --navy-4:#243050;
+  --amber:#F0A818;
+  --amber-light:#F5C254;
+  --amber-dim:#7A5310;
+  --teal:#1D9E75;
+  --teal-light:#5DCAA5;
+  --red:#E24B4A;
+  --text-primary:#F0EDE8;
+  --text-secondary:#9BA3B2;
+  --text-muted:#5A6378;
+  --border:#1E2D45;
+  --border-bright:#2E4060;
+  --serif:'DM Serif Display',Georgia,serif;
+  --sans:'Outfit',system-ui,sans-serif;
+  --radius:8px;
+  --radius-lg:14px;
+  --radius-xl:20px;
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  background:var(--navy);
+  color:var(--text-primary);
+  font-family:var(--sans);
+  font-weight:400;
+  line-height:1.65;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
 
-    :root {
-      --azul-escuro:  #1F3864;
-      --azul-medio:   #2E75B6;
-      --azul-claro:   #E8F0FA;
-      --cinza-claro:  #F5F7FA;
-      --cinza-medio:  #9AA5B1;
-      --cinza-texto:  #4A5568;
-      --branco:       #FFFFFF;
-      --borda:        #E2E8F0;
-      --destaque:     #F59E0B;
-      --fonte:        'Inter', system-ui, -apple-system, sans-serif;
-      --raio:         10px;
-      --sombra:       0 4px 24px rgba(31,56,100,.10);
-    }
+/* ── TYPOGRAPHY ── */
+h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.15;letter-spacing:-0.01em}
+h1{font-size:clamp(2.6rem,5vw,4.2rem)}
+h2{font-size:clamp(1.9rem,3.5vw,2.8rem)}
+h3{font-size:clamp(1.2rem,2vw,1.5rem)}
+p{font-size:1rem;color:var(--text-secondary)}
+strong{color:var(--text-primary);font-weight:600}
+a{color:inherit;text-decoration:none}
 
-    html { scroll-behavior: smooth; }
+/* ── LAYOUT ── */
+.container{max-width:1120px;margin:0 auto;padding:0 24px}
+.section{padding:100px 0}
+.section-label{
+  display:inline-block;
+  font-family:var(--sans);
+  font-size:0.7rem;
+  font-weight:600;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  margin-bottom:1rem;
+}
 
-    body {
-      font-family: var(--fonte);
-      color: var(--cinza-texto);
-      background: var(--branco);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
+/* ── REVEAL ANIMATIONS ── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease}
+.reveal.visible{opacity:1;transform:none}
+.reveal-delay-1{transition-delay:.1s}
+.reveal-delay-2{transition-delay:.2s}
+.reveal-delay-3{transition-delay:.3s}
+.reveal-delay-4{transition-delay:.4s}
 
-    img { max-width: 100%; display: block; }
-    a { color: inherit; text-decoration: none; }
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:0 24px;
+  background:rgba(11,18,32,0.85);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid transparent;
+  transition:border-color .3s;
+}
+nav.scrolled{border-color:var(--border)}
+.nav-inner{
+  max-width:1120px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+  height:68px;
+}
+.nav-logo{
+  font-family:var(--serif);
+  font-size:1.3rem;
+  color:var(--text-primary);
+  letter-spacing:-.02em;
+}
+.nav-logo span{color:var(--amber)}
+.nav-links{display:flex;align-items:center;gap:36px;list-style:none}
+.nav-links a{
+  font-size:.875rem;font-weight:500;
+  color:var(--text-secondary);
+  transition:color .2s;
+}
+.nav-links a:hover{color:var(--text-primary)}
+.nav-actions{display:flex;align-items:center;gap:12px}
+.btn-ghost{
+  padding:9px 20px;border-radius:var(--radius);
+  font-family:var(--sans);font-size:.875rem;font-weight:500;
+  color:var(--text-secondary);
+  border:1px solid var(--border-bright);
+  transition:all .2s;cursor:pointer;
+  background:transparent;
+}
+.btn-ghost:hover{color:var(--text-primary);border-color:var(--text-muted)}
+.btn-primary{
+  padding:10px 22px;border-radius:var(--radius);
+  font-family:var(--sans);font-size:.875rem;font-weight:600;
+  background:var(--amber);color:#0B1220;
+  border:none;cursor:pointer;
+  transition:background .2s,transform .15s;
+  white-space:nowrap;
+}
+.btn-primary:hover{background:var(--amber-light);transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(0)}
+.btn-lg{padding:15px 32px;font-size:1rem;border-radius:var(--radius-lg)}
+.btn-outline-lg{
+  padding:14px 32px;border-radius:var(--radius-lg);
+  font-family:var(--sans);font-size:1rem;font-weight:500;
+  color:var(--text-primary);
+  border:1px solid var(--border-bright);
+  cursor:pointer;background:transparent;
+  transition:all .2s;
+}
+.btn-outline-lg:hover{background:var(--navy-3);border-color:var(--text-muted)}
 
-    .container {
-      width: 100%;
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+/* ── HERO ── */
+#hero{
+  padding:180px 0 120px;
+  position:relative;overflow:hidden;
+}
+.hero-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 0%, rgba(240,168,24,.09) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 20%, rgba(29,158,117,.07) 0%, transparent 50%);
+  pointer-events:none;
+}
+.hero-grid-lines{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size:60px 60px;
+  mask-image:linear-gradient(to bottom, transparent, rgba(0,0,0,.6) 30%, rgba(0,0,0,.6) 70%, transparent);
+  pointer-events:none;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 14px;border-radius:100px;
+  border:1px solid rgba(240,168,24,.35);
+  background:rgba(240,168,24,.08);
+  font-size:.78rem;font-weight:500;color:var(--amber);
+  margin-bottom:28px;
+  animation:fadeIn .8s ease both;
+}
+.hero-badge-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--teal);
+  animation:pulse 2s ease infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.hero-headline{
+  margin-bottom:24px;
+  animation:slideUp .9s ease .1s both;
+}
+.hero-headline em{
+  font-style:italic;color:var(--amber);
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(32px)}to{opacity:1;transform:none}}
+.hero-sub{
+  font-size:1.15rem;max-width:600px;
+  color:var(--text-secondary);margin-bottom:40px;
+  animation:slideUp .9s ease .2s both;
+}
+.hero-actions{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  margin-bottom:56px;
+  animation:slideUp .9s ease .3s both;
+}
+.hero-wa{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:.875rem;color:var(--text-muted);
+  border:1px solid var(--border);
+  padding:10px 18px;border-radius:var(--radius);
+  transition:all .2s;cursor:pointer;
+}
+.hero-wa:hover{color:var(--text-secondary);border-color:var(--border-bright)}
+.hero-wa svg{flex-shrink:0}
+.hero-stats{
+  display:flex;gap:40px;flex-wrap:wrap;
+  animation:slideUp .9s ease .4s both;
+}
+.hero-stat-num{
+  font-family:var(--serif);font-size:2.4rem;
+  color:var(--text-primary);line-height:1;
+}
+.hero-stat-num span{color:var(--amber);font-size:1.4rem}
+.hero-stat-label{font-size:.78rem;color:var(--text-muted);margin-top:4px;font-weight:500}
 
-    /* ── Tipografia ─────────────────────────────────────────────── */
-    h1 { font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 800; line-height: 1.15; }
-    h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); font-weight: 700; line-height: 1.25; }
-    h3 { font-size: 1.15rem; font-weight: 600; }
-    p  { font-size: 1rem; }
+/* ── TRUST BAR ── */
+.trust-bar{
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  background:var(--navy-2);
+  padding:20px 24px;
+}
+.trust-bar-inner{
+  max-width:1120px;margin:0 auto;
+  display:flex;align-items:center;justify-content:center;
+  gap:40px;flex-wrap:wrap;
+}
+.trust-item{
+  display:flex;align-items:center;gap:8px;
+  font-size:.8rem;font-weight:500;color:var(--text-muted);
+}
+.trust-item svg{color:var(--teal);flex-shrink:0}
+.trust-item strong{color:var(--text-secondary);font-weight:600}
 
-    .label {
-      display: inline-block;
-      font-size: .75rem;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: var(--azul-medio);
-      background: var(--azul-claro);
-      padding: 4px 12px;
-      border-radius: 20px;
-      margin-bottom: 16px;
-    }
+/* ── PROBLEM ── */
+.problem-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:1px;background:var(--border);border-radius:var(--radius-lg);overflow:hidden;
+  border:1px solid var(--border);
+}
+.problem-card{
+  background:var(--navy-2);padding:32px 28px;
+  position:relative;
+}
+.problem-num{
+  font-family:var(--serif);font-size:3rem;
+  color:rgba(240,168,24,.12);
+  position:absolute;top:16px;right:20px;line-height:1;
+}
+.problem-icon{
+  width:40px;height:40px;border-radius:var(--radius);
+  background:rgba(240,168,24,.1);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:16px;
+}
+.problem-icon svg{color:var(--amber)}
+.problem-card h3{font-size:1.05rem;margin-bottom:8px}
 
-    /* ── Botões ─────────────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      border-radius: var(--raio);
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform .15s, box-shadow .15s, opacity .15s;
-      border: none;
-      text-decoration: none;
-    }
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.15); }
-    .btn:active { transform: translateY(0); }
+/* ── PROTOCOLO ── */
+.protocol-list{display:flex;flex-direction:column;gap:0}
+.protocol-item{
+  display:flex;gap:24px;align-items:flex-start;
+  padding:28px 0;
+  border-bottom:1px solid var(--border);
+  position:relative;
+}
+.protocol-item:last-child{border-bottom:none}
+.protocol-step{
+  flex-shrink:0;width:44px;height:44px;
+  border-radius:var(--radius);
+  background:var(--navy-3);
+  border:1px solid var(--border-bright);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--serif);font-size:1rem;color:var(--amber);
+  font-weight:700;
+}
+.protocol-content h3{font-size:1.05rem;margin-bottom:6px}
+.protocol-tag{
+  display:inline-block;padding:3px 10px;border-radius:100px;
+  font-size:.7rem;font-weight:600;
+  margin-top:8px;
+}
+.tag-auto{background:rgba(29,158,117,.15);color:var(--teal-light)}
+.tag-human{background:rgba(240,168,24,.12);color:var(--amber)}
+.tag-ai{background:rgba(53,74,183,.18);color:#8B9AEB}
 
-    .btn-primary {
-      background: var(--azul-medio);
-      color: var(--branco);
-    }
-    .btn-primary:hover { background: #2563a8; }
+/* ── FEATURES NOVAS ── */
+.features-new-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:20px;
+}
+.feature-card{
+  background:var(--navy-2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:28px;
+  transition:border-color .2s,transform .2s;
+}
+.feature-card:hover{border-color:var(--border-bright);transform:translateY(-2px)}
+.feature-card-icon{
+  width:44px;height:44px;border-radius:var(--radius);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:16px;
+}
+.ic-teal{background:rgba(29,158,117,.15)}
+.ic-teal svg{color:var(--teal)}
+.ic-amber{background:rgba(240,168,24,.12)}
+.ic-amber svg{color:var(--amber)}
+.ic-blue{background:rgba(53,74,183,.18)}
+.ic-blue svg{color:#8B9AEB}
+.feature-card h3{font-size:1rem;margin-bottom:8px}
 
-    .btn-outline {
-      background: transparent;
-      color: var(--azul-escuro);
-      border: 2px solid var(--azul-escuro);
-    }
-    .btn-outline:hover { background: var(--azul-escuro); color: var(--branco); }
+/* ── DIFERENCIAIS ── */
+.diff-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border)}
+@media(max-width:768px){.diff-grid{grid-template-columns:1fr}}
+.diff-col{background:var(--navy-2);padding:32px 28px}
+.diff-col:first-child{background:var(--navy-3)}
+.diff-header{
+  display:flex;align-items:center;gap:10px;
+  padding-bottom:20px;margin-bottom:20px;
+  border-bottom:1px solid var(--border);
+}
+.diff-vs-badge{
+  padding:4px 12px;border-radius:100px;
+  font-size:.7rem;font-weight:700;
+  background:rgba(226,75,74,.15);color:#F09595;
+  letter-spacing:.05em;
+}
+.diff-orbis-badge{
+  padding:4px 12px;border-radius:100px;
+  font-size:.7rem;font-weight:700;
+  background:rgba(240,168,24,.15);color:var(--amber);
+  letter-spacing:.05em;
+}
+.diff-list{list-style:none;display:flex;flex-direction:column;gap:12px}
+.diff-list li{
+  font-size:.875rem;color:var(--text-secondary);
+  padding-left:22px;position:relative;
+}
+.diff-list li::before{
+  content:'';position:absolute;left:0;top:.55em;
+  width:10px;height:10px;border-radius:50%;
+  flex-shrink:0;
+}
+.diff-list.negative li::before{background:rgba(226,75,74,.4)}
+.diff-list.positive li::before{background:var(--teal)}
+.diff-title{font-size:.78rem;font-weight:600;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}
 
-    .btn-white {
-      background: var(--branco);
-      color: var(--azul-escuro);
-    }
-    .btn-white:hover { background: var(--azul-claro); }
+/* ── PRICING ── */
+.pricing-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:20px;align-items:start;
+}
+.price-card{
+  background:var(--navy-2);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:36px 32px;
+  position:relative;transition:border-color .2s;
+}
+.price-card:hover{border-color:var(--border-bright)}
+.price-card.featured{
+  border-color:var(--amber);
+  background:linear-gradient(145deg,var(--navy-3) 0%,var(--navy-2) 100%);
+}
+.price-badge{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  padding:4px 16px;border-radius:100px;
+  background:var(--amber);color:#0B1220;
+  font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  white-space:nowrap;
+}
+.price-label{font-size:.75rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px}
+.price-amount{
+  display:flex;align-items:baseline;gap:4px;margin-bottom:4px;
+}
+.price-currency{font-size:1.2rem;color:var(--text-secondary);font-weight:500;margin-top:6px}
+.price-number{font-family:var(--serif);font-size:3rem;color:var(--text-primary);line-height:1}
+.price-period{font-size:.85rem;color:var(--text-muted)}
+.price-promo{
+  font-size:.8rem;color:var(--amber);margin-bottom:24px;
+  padding:8px 14px;border-radius:var(--radius);
+  background:rgba(240,168,24,.08);border:1px solid rgba(240,168,24,.2);
+}
+.price-divider{height:1px;background:var(--border);margin:24px 0}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:12px;margin-bottom:28px}
+.price-features li{
+  font-size:.875rem;color:var(--text-secondary);
+  display:flex;align-items:flex-start;gap:10px;
+}
+.price-features li svg{color:var(--teal);flex-shrink:0;margin-top:2px}
+.price-coming{
+  font-size:.8rem;color:var(--text-muted);
+  text-align:center;padding:12px;
+  border:1px dashed var(--border);border-radius:var(--radius);
+  margin-top:8px;
+}
+.trial-note{
+  text-align:center;font-size:.8rem;color:var(--text-muted);margin-top:12px;
+}
 
-    @keyframes pulse-wa {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,.45); }
-      60% { box-shadow: 0 0 0 10px rgba(37,211,102,0); }
-    }
-    .btn-whatsapp {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background-color: #25D366;
-      color: #ffffff;
-      padding: 14px 28px;
-      border-radius: var(--raio);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 1rem;
-      transition: background-color 0.2s ease, transform .15s, box-shadow .15s;
-      border: none;
-      cursor: pointer;
-      animation: pulse-wa 2.5s infinite;
-    }
-    .btn-whatsapp:hover {
-      background-color: #1DA851;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,.15);
-      animation: none;
-    }
-    .btn-whatsapp.btn-lg { padding: 18px 36px; font-size: 1.1rem; }
-    .nav-wordmark {
-      font-size: 1.45rem;
-      font-weight: 800;
-      letter-spacing: -.02em;
-      line-height: 1;
-      color: #1F3864;
-      text-decoration: none;
-      display: inline-block;
-      vertical-align: middle;
-    }
+/* ── SECURITY STRIP ── */
+.security-strip{
+  background:var(--navy-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:60px 24px;
+}
+.security-inner{max-width:1120px;margin:0 auto}
+.security-badges{
+  display:flex;gap:16px;flex-wrap:wrap;margin-top:32px;
+}
+.sec-badge{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 18px;border-radius:var(--radius-lg);
+  background:var(--navy-3);border:1px solid var(--border-bright);
+  flex:1;min-width:180px;
+}
+.sec-badge svg{color:var(--teal);flex-shrink:0}
+.sec-badge-text strong{display:block;font-size:.875rem;font-weight:600;color:var(--text-primary)}
+.sec-badge-text span{font-size:.75rem;color:var(--text-muted)}
 
-    .btn-lg { padding: 18px 36px; font-size: 1.1rem; }
+/* ── FINAL CTA ── */
+.final-cta{
+  text-align:center;padding:120px 24px;
+  position:relative;overflow:hidden;
+}
+.final-cta-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 70% at 50% 50%, rgba(240,168,24,.07) 0%, transparent 70%);
+  pointer-events:none;
+}
+.final-cta h2{margin-bottom:16px}
+.final-cta p{max-width:520px;margin:0 auto 36px;font-size:1.05rem}
+.final-cta-actions{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+.trial-details{
+  display:flex;align-items:center;gap:24px;justify-content:center;flex-wrap:wrap;
+  margin-top:28px;font-size:.8rem;color:var(--text-muted);
+}
+.trial-details span{display:flex;align-items:center;gap:6px}
 
-    /* ── Nav ────────────────────────────────────────────────────── */
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(255,255,255,.95);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--borda);
-      padding: 0;
-    }
-    .nav-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 64px;
-      padding: 8px 0;
-    }
-    .logo {
-      display: flex;
-      align-items: center;
-    }
-    .logo img { height: 48px; width: auto; display: block; }
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      list-style: none;
-    }
-    .nav-links a {
-      font-size: .9rem;
-      font-weight: 500;
-      color: var(--cinza-texto);
-      transition: color .15s;
-    }
-    .nav-links a:hover { color: var(--azul-medio); }
-    .nav-cta { display: flex; gap: 12px; align-items: center; }
-    .nav-mobile-toggle {
-      display: none;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 4px;
-      color: var(--azul-escuro);
-    }
+/* ── FOOTER ── */
+footer{
+  border-top:1px solid var(--border);padding:40px 24px;
+  background:var(--navy);
+}
+.footer-inner{
+  max-width:1120px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;
+}
+.footer-links{display:flex;gap:24px;flex-wrap:wrap}
+.footer-links a{font-size:.8rem;color:var(--text-muted);transition:color .2s}
+.footer-links a:hover{color:var(--text-secondary)}
+.footer-copy{font-size:.8rem;color:var(--text-muted)}
+.disclaimer{
+  max-width:1120px;margin:24px auto 0;padding-top:24px;
+  border-top:1px solid var(--border);
+  font-size:.72rem;color:var(--text-muted);line-height:1.6;
+}
 
-    @media (max-width: 768px) {
-      .nav-links, .nav-cta { display: none; }
-      .nav-mobile-toggle { display: block; }
-      nav.open .nav-links,
-      nav.open .nav-cta {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 16px 24px;
-        gap: 16px;
-        background: var(--branco);
-        border-top: 1px solid var(--borda);
-      }
-      nav.open { display: block; }
-      nav.open .nav-inner { flex-wrap: wrap; height: auto; padding: 12px 0; }
-    }
+/* ── DIVIDER ── */
+.section-divider{
+  height:1px;max-width:1120px;margin:0 auto;
+  background:linear-gradient(90deg,transparent,var(--border) 20%,var(--border) 80%,transparent);
+}
 
-    /* ── Hero ───────────────────────────────────────────────────── */
-    #hero {
-      background: linear-gradient(135deg, var(--azul-escuro) 0%, #2a4d8a 60%, var(--azul-medio) 100%);
-      color: var(--branco);
-      padding: 100px 0 80px;
-      overflow: hidden;
-      position: relative;
-    }
-    #hero::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-      pointer-events: none;
-    }
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1fr 1.12fr;
-      gap: 48px;
-      align-items: center;
-      position: relative;
-    }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(255,255,255,.12);
-      border: 1px solid rgba(255,255,255,.2);
-      border-radius: 20px;
-      padding: 6px 14px;
-      font-size: .8rem;
-      font-weight: 600;
-      margin-bottom: 24px;
-      color: rgba(255,255,255,.9);
-    }
-    #hero h1 { color: var(--branco); margin-bottom: 20px; }
-    .hero-sub {
-      font-size: 1.2rem;
-      color: rgba(255,255,255,.82);
-      margin-bottom: 20px;
-      max-width: 480px;
-    }
-    .hero-trust {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 20px;
-      margin-bottom: 32px;
-      font-size: .82rem;
-      color: rgba(255,255,255,.60);
-    }
-    .hero-trust span { display: flex; align-items: center; gap: 5px; }
-    .hero-trust span::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: rgba(147,197,253,.7); flex-shrink: 0; }
-    .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; }
-    .hero-visual {
-      border-radius: 16px 0 0 16px;
-      overflow: hidden;
-      box-shadow: 0 32px 80px rgba(0,0,0,.5);
-      border: 1px solid rgba(255,255,255,.12);
-      margin-right: calc(((100vw - 1120px) / -2) - 24px + 48px);
-    }
-    .hero-visual img { width: 100%; height: auto; display: block; }
-    .hero-stats {
-      display: flex;
-      gap: 32px;
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 1px solid rgba(255,255,255,.15);
-      flex-wrap: wrap;
-    }
-    .stat-item { }
-    .stat-num {
-      font-size: 1.75rem;
-      font-weight: 800;
-      color: var(--branco);
-      display: block;
-    }
-    .stat-label {
-      font-size: .8rem;
-      color: rgba(255,255,255,.65);
-    }
-
-    @media (max-width: 768px) {
-      #hero { padding: 64px 0 48px; }
-      .hero-grid { grid-template-columns: 1fr; gap: 40px; }
-      .hero-visual { display: none; }
-    }
-
-    /* ── Seções genéricas ───────────────────────────────────────── */
-    section { padding: 96px 0; }
-    .section-header { text-align: center; max-width: 640px; margin: 0 auto 56px; }
-    .section-header h2 { color: var(--azul-escuro); margin-bottom: 16px; }
-    .section-header p { font-size: 1.1rem; color: var(--cinza-texto); }
-
-    /* ── Problema ───────────────────────────────────────────────── */
-    #problema { background: var(--cinza-claro); }
-    .problema-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 24px;
-    }
-    .problema-card {
-      background: var(--branco);
-      border: 1px solid var(--borda);
-      border-radius: var(--raio);
-      padding: 28px 24px;
-      transition: box-shadow .2s;
-    }
-    .problema-card:hover { box-shadow: var(--sombra); }
-    .problema-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: var(--azul-claro);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-    }
-    .problema-card h3 { color: var(--azul-escuro); margin-bottom: 8px; }
-    .problema-card p { font-size: .9rem; color: var(--cinza-texto); }
-
-    /* ── Solução / P1-P6 ────────────────────────────────────────── */
-    #solucao { background: var(--branco); }
-    .passos-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      margin-bottom: 56px;
-    }
-    .passo-card {
-      border: 1px solid var(--borda);
-      border-radius: var(--raio);
-      padding: 24px;
-      position: relative;
-      transition: border-color .2s, box-shadow .2s;
-    }
-    .passo-card:hover {
-      border-color: var(--azul-medio);
-      box-shadow: 0 0 0 3px var(--azul-claro);
-    }
-    .passo-num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: var(--azul-escuro);
-      color: var(--branco);
-      font-size: .8rem;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }
-    .passo-card h3 { color: var(--azul-escuro); margin-bottom: 6px; }
-    .passo-card p { font-size: .88rem; }
-
-    .solucao-features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
-      background: var(--azul-claro);
-      border-radius: 16px;
-      padding: 32px;
-    }
-    .feature-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-    }
-    .feature-check {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--azul-medio);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 2px;
-    }
-    .feature-item p { font-size: .9rem; font-weight: 500; color: var(--azul-escuro); }
-
-    /* ── Diferenciais ───────────────────────────────────────────── */
-    #diferenciais { background: var(--cinza-claro); }
-    .diferenciais-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 24px;
-    }
-    .diferencial-card {
-      background: var(--branco);
-      border-radius: var(--raio);
-      padding: 32px 28px;
-      border: 1px solid var(--borda);
-    }
-    .diferencial-vs {
-      font-size: .75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--cinza-medio);
-      margin-bottom: 8px;
-    }
-    .diferencial-card h3 {
-      color: var(--azul-escuro);
-      font-size: 1.1rem;
-      margin-bottom: 16px;
-    }
-    .diferencial-lista { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-    .diferencial-lista li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: .88rem;
-    }
-    .diferencial-lista li::before {
-      content: '✓';
-      color: var(--azul-medio);
-      font-weight: 700;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    /* ── Preços ─────────────────────────────────────────────────── */
-    #precos { background: var(--azul-escuro); }
-    #precos .section-header h2 { color: var(--branco); }
-    #precos .section-header p { color: rgba(255,255,255,.7); }
-    #precos .label { background: rgba(255,255,255,.1); color: rgba(255,255,255,.85); }
-
-    .precos-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 24px;
-      align-items: start;
-    }
-    .preco-card {
-      background: rgba(255,255,255,.10);
-      border: 1px solid rgba(255,255,255,.22);
-      border-radius: 16px;
-      padding: 36px 28px;
-      color: var(--branco);
-      transition: transform .2s, box-shadow .2s;
-    }
-    .preco-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(0,0,0,.3); }
-    .preco-card.destaque {
-      background: var(--branco);
-      color: var(--azul-escuro);
-      border-color: var(--branco);
-      position: relative;
-    }
-    .preco-badge {
-      position: absolute;
-      top: -14px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--destaque);
-      color: #7c4a00;
-      font-size: .72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      padding: 4px 14px;
-      border-radius: 20px;
-      white-space: nowrap;
-    }
-    .preco-plano {
-      font-size: .8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      margin-bottom: 8px;
-      opacity: .7;
-    }
-    .preco-card.destaque .preco-plano { color: var(--azul-medio); opacity: 1; }
-    .preco-card h3 {
-      font-size: 1.5rem;
-      font-weight: 800;
-      margin-bottom: 4px;
-    }
-    .preco-usuarios {
-      font-size: .85rem;
-      opacity: .65;
-      margin-bottom: 24px;
-    }
-    .preco-divider {
-      border: none;
-      border-top: 1px solid rgba(255,255,255,.12);
-      margin: 20px 0;
-    }
-    .preco-card.destaque .preco-divider { border-color: var(--borda); }
-    .preco-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
-    .preco-features li {
-      display: flex;
-      gap: 10px;
-      font-size: .88rem;
-      align-items: flex-start;
-    }
-    .preco-features li .ck {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--azul-medio);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 2px;
-    }
-    .preco-card.destaque .preco-features li .ck { background: var(--azul-escuro); }
-    .preco-trial {
-      text-align: center;
-      font-size: .78rem;
-      opacity: .6;
-      margin-top: 12px;
-    }
-
-    /* ── Disclaimer ─────────────────────────────────────────────── */
-    #disclaimer {
-      background: #fffbeb;
-      border-top: 3px solid var(--destaque);
-      padding: 32px 0;
-    }
-    .disclaimer-inner {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-    }
-    .disclaimer-icon {
-      flex-shrink: 0;
-      width: 36px;
-      height: 36px;
-      background: var(--destaque);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 2px;
-    }
-    #disclaimer p {
-      font-size: .88rem;
-      color: #7c4a00;
-      line-height: 1.65;
-    }
-    #disclaimer strong { font-weight: 700; }
-
-    /* ── CTA final ──────────────────────────────────────────────── */
-    #cta-final {
-      background: linear-gradient(135deg, var(--azul-medio), var(--azul-escuro));
-      padding: 80px 0;
-      text-align: center;
-    }
-    #cta-final h2 { color: var(--branco); margin-bottom: 12px; }
-    #cta-final p { color: rgba(255,255,255,.75); font-size: 1.1rem; margin-bottom: 32px; }
-    .cta-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-
-    /* ── Footer ─────────────────────────────────────────────────── */
-    footer {
-      background: var(--azul-escuro);
-      border-top: 1px solid rgba(255,255,255,.08);
-      padding: 40px 0 32px;
-    }
-    .footer-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 24px;
-    }
-    .footer-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--branco);
-      font-weight: 700;
-      font-size: 1.1rem;
-    }
-    .footer-links {
-      display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
-      list-style: none;
-    }
-    .footer-links a {
-      font-size: .82rem;
-      color: rgba(255,255,255,.55);
-      transition: color .15s;
-    }
-    .footer-links a:hover { color: rgba(255,255,255,.9); }
-    .footer-copy {
-      font-size: .78rem;
-      color: rgba(255,255,255,.35);
-    }
-
-    /* ── Utilidades ─────────────────────────────────────────────── */
-    .text-center { text-align: center; }
-    .mt-4  { margin-top: 16px; }
-    .mt-8  { margin-top: 32px; }
-    .mt-12 { margin-top: 48px; }
-
-    /* SVG check inline */
-    .svg-check { display: block; }
-  </style>
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .nav-links{display:none}
+  .hero-stats{gap:28px}
+  .protocol-item{gap:16px}
+}
+@media(max-width:600px){
+  #hero{padding:140px 0 80px}
+  .hero-actions{flex-direction:column;align-items:flex-start}
+  .btn-lg,.btn-outline-lg{width:100%;text-align:center;justify-content:center}
+  .trust-bar-inner{gap:24px}
+  .diff-grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body>
 
-<!-- ═══════════════════════════ NAV ════════════════════════════════ -->
+<!-- NAV -->
 <nav id="nav">
-  <div class="container">
-    <div class="nav-inner">
-      <a href="#" class="logo">
-        <span class="nav-wordmark">ORBIS<span style="color:#2E75B6">.TAX</span></span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="#problema">O Problema</a></li>
-        <li><a href="#solucao">Como Funciona</a></li>
-        <li><a href="#diferenciais">Diferenciais</a></li>
-        <li><a href="#precos">Planos</a></li>
-      </ul>
-      <div class="nav-cta">
-        <a href="/login" class="btn btn-outline" style="padding:10px 20px;font-size:.9rem;">Entrar</a>
-        <a href="/register" class="btn btn-primary" style="padding:10px 20px;font-size:.9rem;">Testar grátis</a>
-      </div>
-      <button class="nav-mobile-toggle" id="menuBtn" aria-label="Menu">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M3 12h18M3 6h18M3 18h18" stroke-linecap="round"/>
-        </svg>
-      </button>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">Orbis<span>.</span>tax</a>
+    <ul class="nav-links">
+      <li><a href="#problema">O Problema</a></li>
+      <li><a href="#solucao">Como Funciona</a></li>
+      <li><a href="#seguranca">Segurança</a></li>
+      <li><a href="#precos">Planos</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a href="/login" class="btn-ghost">Entrar</a>
+      <a href="/register" class="btn-primary">Testar grátis</a>
     </div>
   </div>
 </nav>
 
-<!-- ════════════════════════════ HERO ══════════════════════════════ -->
+<!-- HERO -->
 <section id="hero">
-  <div class="container">
-    <div class="hero-grid">
+  <div class="hero-bg"></div>
+  <div class="hero-grid-lines"></div>
+  <div class="container" style="position:relative">
+
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      Base de normas atualizada · Reforma Tributária 2026
+    </div>
+
+    <h1 class="hero-headline">
+      Decisões tributárias<br>
+      <em>documentadas</em>, não<br>
+      opiniões genéricas de IA
+    </h1>
+
+    <p class="hero-sub">
+      Protocolo cognitivo de 6 passos com base atualizada da Reforma Tributária.
+      Cada análise cita a norma, indica grau de confiança e gera trilha de auditoria imutável.
+    </p>
+
+    <div class="hero-actions">
+      <a href="/register" class="btn-primary btn-lg">Começar — 7 dias grátis</a>
+      <a href="#solucao" class="btn-outline-lg">Ver como funciona</a>
+      <a href="https://wa.me/5511972521970?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20Orbis.tax" class="hero-wa" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Falar no WhatsApp
+      </a>
+    </div>
+
+    <div class="hero-stats">
       <div>
-        <div class="hero-badge">
-          <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          Base de normas atualizada · Reforma Tributária 2026
-        </div>
-        <h1>Decisões tributárias documentadas, não opiniões genéricas de IA</h1>
-        <p class="hero-sub">Protocolo cognitivo de 6 passos com base atualizada da Reforma Tributária. Cada análise cita a norma, indica o grau de confiança e gera trilha de auditoria.</p>
-        <div class="hero-trust">
-          <span>1.596 normas indexadas</span>
-          <span>3 leis-base curadas</span>
-          <span>Auditável P1→P6</span>
-        </div>
-        <div class="hero-actions">
-          <a href="/register" class="btn btn-white btn-lg">
-            Começar — 7 dias grátis
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </a>
-          <a href="#solucao" class="btn btn-outline btn-lg" style="border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.9);">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg>
-            Ver como funciona
-          </a>
-          <!-- WhatsApp Business Orbis.tax — +55 11 99970-0215 -->
-          <a
-            href="https://wa.me/5511972521970?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20Orbis.tax"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn-whatsapp btn-lg"
-            aria-label="Conversar no WhatsApp"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-            </svg>
-            Falar no WhatsApp
-          </a>
-        </div>
-        <div class="hero-stats">
-          <div class="stat-item">
-            <span class="stat-num">3</span>
-            <span class="stat-label">Normas-base curadas<br>(EC 132, LC 214, LC 227)</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-num">6</span>
-            <span class="stat-label">Passos do<br>protocolo cognitivo</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-num">100%</span>
-            <span class="stat-label">Respostas com<br>citação de fonte</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-num">1.596</span>
-            <span class="stat-label">Trechos normativos<br>indexados e curados</span>
-          </div>
-        </div>
+        <div class="hero-stat-num"><span data-count="1596">1.596</span></div>
+        <div class="hero-stat-label">Trechos normativos indexados</div>
       </div>
-      <div class="hero-visual">
-        <img src="/app-screenshot.png" alt="Painel Orbis.tax — Consulta tributária com base legislativa verificada">
+      <div>
+        <div class="hero-stat-num" style="display:flex;align-items:baseline;gap:4px">
+          <span>3</span>
+        </div>
+        <div class="hero-stat-label">Leis-base curadas (EC 132, LC 214, LC 227)</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">6</div>
+        <div class="hero-stat-label">Passos do protocolo cognitivo</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">100<span>%</span></div>
+        <div class="hero-stat-label">Respostas com citação de fonte</div>
       </div>
     </div>
+
   </div>
 </section>
 
-<!-- ════════════════════════ PROBLEMA ══════════════════════════════ -->
-<section id="problema">
-  <div class="container">
-    <div class="section-header">
-      <span class="label">Por que o Orbis.tax existe</span>
-      <h2>A maior reforma fiscal em 50 anos não tem manual de instruções</h2>
-      <p>CBS, IBS e IS substituem cinco tributos até 2033. Cada norma nova cria obrigações, riscos e oportunidades — e o gestor tributário precisa de decisões documentadas, não de respostas de chatbot.</p>
+<!-- TRUST BAR -->
+<div class="trust-bar">
+  <div class="trust-bar-inner">
+    <div class="trust-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>Dados isolados por <strong>CNPJ</strong></span>
     </div>
-    <div class="problema-grid">
-      <div class="problema-card">
-        <div class="problema-icon">
-          <svg width="22" height="22" fill="none" stroke="#2E75B6" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6M9 16h6M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="trust-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      <span>Conformidade <strong>LGPD</strong> com DPO designado</span>
+    </div>
+    <div class="trust-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Base atualizada em até <strong>7 dias</strong> do DOU</span>
+    </div>
+    <div class="trust-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      <span>Trial <strong>7 dias</strong> · sem cartão</span>
+    </div>
+    <div class="trust-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <span>Cancelamento <strong>self-service</strong></span>
+    </div>
+  </div>
+</div>
+
+<!-- PROBLEMA -->
+<section class="section" id="problema">
+  <div class="container">
+    <div class="reveal">
+      <span class="section-label">Por que o Orbis.tax existe</span>
+      <h2 style="max-width:640px;margin-bottom:16px">
+        A maior reforma fiscal em 50 anos não tem manual de instruções
+      </h2>
+      <p style="max-width:580px;margin-bottom:56px">
+        CBS, IBS e IS substituem cinco tributos até 2033. Cada norma nova cria obrigações, riscos e oportunidades — e o gestor tributário precisa de decisões documentadas, não de respostas de chatbot.
+      </p>
+    </div>
+
+    <div class="problem-grid reveal reveal-delay-1">
+      <div class="problem-card">
+        <div class="problem-num">01</div>
+        <div class="problem-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
         <h3>53 normas tributárias por dia útil</h3>
-        <p>O Brasil publica mais de 53 atos normativos tributários por dia útil. Acompanhar a Reforma em tempo real é impossível sem automação.</p>
+        <p style="margin-top:8px;font-size:.875rem">Acompanhar a Reforma em tempo real é impossível sem automação — e o risco de decidir com base em norma desatualizada é real.</p>
       </div>
-      <div class="problema-card">
-        <div class="problema-icon">
-          <svg width="22" height="22" fill="none" stroke="#2E75B6" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v4l2 2M12 3a9 9 0 110 18A9 9 0 0112 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="problem-card">
+        <div class="problem-num">02</div>
+        <div class="problem-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
         </div>
         <h3>Transição gradual até 2033</h3>
-        <p>Seis anos de convivência entre regime antigo e novo. Alíquotas, isenções e regimes especiais mudam ano a ano — a resposta correta hoje pode não ser a de amanhã.</p>
+        <p style="margin-top:8px;font-size:.875rem">Seis anos de convivência entre regime antigo e novo. A resposta correta hoje pode não ser a de amanhã — sem rastreamento temporal, você decide no escuro.</p>
       </div>
-      <div class="problema-card">
-        <div class="problema-icon">
-          <svg width="22" height="22" fill="none" stroke="#2E75B6" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="problem-card">
+        <div class="problem-num">03</div>
+        <div class="problem-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
         <h3>Decisões precisam de rastreabilidade</h3>
-        <p>Auditoria fiscal, due diligence e compliance exigem que cada decisão tributária esteja fundamentada em norma vigente e registrada com data e responsável.</p>
+        <p style="margin-top:8px;font-size:.875rem">Auditoria fiscal, due diligence e compliance exigem que cada decisão tributária esteja fundamentada em norma vigente e registrada com data e responsável.</p>
       </div>
-      <div class="problema-card">
-        <div class="problema-icon">
-          <svg width="22" height="22" fill="none" stroke="#2E75B6" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="problem-card">
+        <div class="problem-num">04</div>
+        <div class="problem-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </div>
         <h3>IA genérica não é suficiente</h3>
-        <p>ChatGPT e similares não têm as normas mais recentes, não citam fontes com precisão e não seguem um protocolo auditável. O risco de alucinação é inaceitável em contexto fiscal.</p>
+        <p style="margin-top:8px;font-size:.875rem">ChatGPT e similares não têm as normas mais recentes, não citam fontes com precisão e não seguem protocolo auditável. O risco de alucinação é inaceitável em contexto fiscal.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═════════════════════════ SOLUÇÃO ═══════════════════════════════ -->
-<section id="solucao">
+<div class="section-divider"></div>
+
+<!-- PROTOCOLO -->
+<section class="section" id="solucao">
   <div class="container">
-    <div class="section-header">
-      <span class="label">Como funciona</span>
-      <h2>Protocolo cognitivo de 6 passos — estruturado, auditável, rastreável</h2>
-      <p>Cada consulta no Orbis.tax segue um protocolo fixo. Não é uma conversa informal — é um processo decisório com etapas documentadas e fundamentação jurídica.</p>
-    </div>
-    <div class="passos-grid">
-      <div class="passo-card">
-        <div class="passo-num">P1</div>
-        <h3>Qualificação da consulta</h3>
-        <p>Identificação do tipo de questão, tributos envolvidos e período de vigência aplicável (antes ou depois da Reforma).</p>
-      </div>
-      <div class="passo-card">
-        <div class="passo-num">P2</div>
-        <h3>Busca na base de normas</h3>
-        <p>Recuperação semântica nas normas curadas (EC 132/2023, LC 214/2025, LC 227/2026) com score de relevância e citação precisa.</p>
-      </div>
-      <div class="passo-card">
-        <div class="passo-num">P3</div>
-        <h3>Análise e síntese</h3>
-        <p>Geração de análise fundamentada com identificação de lacunas normativas, contradições e grau de consolidação jurídica.</p>
-      </div>
-      <div class="passo-card">
-        <div class="passo-num">P4</div>
-        <h3>Verificação anti-alucinação</h3>
-        <p>Checagem automática de consistência entre a análise gerada e as fontes primárias. Bloqueio de respostas de baixa confiança.</p>
-      </div>
-      <div class="passo-card">
-        <div class="passo-num">P5</div>
-        <h3>Geração de output acionável</h3>
-        <p>Documento estruturado com conclusão, fundamento legal, grau de certeza, alertas de risco e próximos passos recomendados.</p>
-      </div>
-      <div class="passo-card">
-        <div class="passo-num">P6</div>
-        <h3>Registro na trilha de auditoria</h3>
-        <p>Cada análise é registrada com data, usuário, normas consultadas e versão da base de normas — pronto para auditoria fiscal ou due diligence.</p>
-      </div>
-    </div>
-    <div class="solucao-features">
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start" class="reveal">
+      <div>
+        <span class="section-label">Como funciona</span>
+        <h2 style="margin-bottom:16px">Protocolo cognitivo de 6 passos</h2>
+        <p>Cada consulta no Orbis.tax segue um protocolo fixo. Não é uma conversa informal — é um processo decisório com etapas documentadas e fundamentação jurídica verificável.</p>
+        <div style="margin-top:32px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--text-secondary)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Base de normas atualizada em até 7 dias da publicação
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--text-secondary)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Citação de artigo e norma em cada resposta
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--text-secondary)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Grau de confiança explícito — VERDE / AMARELO / VERMELHO
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--text-secondary)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Alerta de terceirização cognitiva (Carimbo)
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:.875rem;color:var(--text-secondary)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Compliance LGPD — dados do tenant isolados por CNPJ
+          </div>
         </div>
-        <p>Base de normas atualizada em até 7 dias da publicação</p>
       </div>
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="protocol-list">
+        <div class="protocol-item">
+          <div class="protocol-step">P1</div>
+          <div class="protocol-content">
+            <h3>Qualificação da consulta</h3>
+            <p style="font-size:.875rem">Identificação do tipo de questão, tributos envolvidos e período de vigência aplicável.</p>
+            <span class="protocol-tag tag-human">Usuário</span>
+          </div>
         </div>
-        <p>Citação de artigo e norma em cada resposta</p>
-      </div>
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="protocol-item">
+          <div class="protocol-step">P2</div>
+          <div class="protocol-content">
+            <h3>Busca na base de normas</h3>
+            <p style="font-size:.875rem">Recuperação semântica nas normas curadas (EC 132/2023, LC 214/2025, LC 227/2026) com score de relevância.</p>
+            <span class="protocol-tag tag-ai">Orbis.tax</span>
+          </div>
         </div>
-        <p>Grau de confiança explícito (VERDE / AMARELO / VERMELHO)</p>
-      </div>
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="protocol-item">
+          <div class="protocol-step">P3</div>
+          <div class="protocol-content">
+            <h3>Análise e síntese</h3>
+            <p style="font-size:.875rem">Geração de análise fundamentada com identificação de lacunas normativas, contradições e grau de consolidação jurídica.</p>
+            <span class="protocol-tag tag-ai">Orbis.tax</span>
+          </div>
         </div>
-        <p>Alerta de terceirização cognitiva (Carimbo)</p>
-      </div>
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="protocol-item">
+          <div class="protocol-step">P4</div>
+          <div class="protocol-content">
+            <h3>Verificação anti-alucinação</h3>
+            <p style="font-size:.875rem">Checagem automática de consistência entre a análise gerada e as fontes primárias. Bloqueio de respostas de baixa confiança.</p>
+            <span class="protocol-tag tag-auto">Automático</span>
+          </div>
         </div>
-        <p>Outputs acionáveis: notas, recomendações, alertas</p>
-      </div>
-      <div class="feature-item">
-        <div class="feature-check">
-          <svg class="svg-check" width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="protocol-item">
+          <div class="protocol-step">P5</div>
+          <div class="protocol-content">
+            <h3>Geração de output acionável</h3>
+            <p style="font-size:.875rem">Documento estruturado com conclusão, fundamento legal, grau de certeza, alertas de risco e próximos passos recomendados.</p>
+            <span class="protocol-tag tag-ai">Orbis.tax</span>
+          </div>
         </div>
-        <p>Compliance LGPD — dados do tenant isolados</p>
+        <div class="protocol-item">
+          <div class="protocol-step">P6</div>
+          <div class="protocol-content">
+            <h3>Registro na trilha de auditoria</h3>
+            <p style="font-size:.875rem">Cada análise é registrada com data, usuário, normas consultadas e versão da base — pronto para auditoria fiscal ou due diligence.</p>
+            <span class="protocol-tag tag-auto">Automático</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════ DIFERENCIAIS ════════════════════════════ -->
-<section id="diferenciais">
-  <div class="container">
-    <div class="section-header">
-      <span class="label">Por que o Orbis.tax</span>
-      <h2>Feito para quem decide, não para quem experimenta</h2>
-      <p>Existem muitas ferramentas de IA no mercado. Nenhuma delas foi construída especificamente para decisões tributárias no contexto da Reforma brasileira.</p>
+<div class="section-divider"></div>
+
+<!-- SEGURANÇA E TRIAL -->
+<section class="security-strip" id="seguranca">
+  <div class="security-inner">
+    <div class="reveal">
+      <span class="section-label">Controle e transparência</span>
+      <h2 style="max-width:580px;margin-bottom:12px">Segurança, privacidade e previsibilidade desde o primeiro acesso</h2>
+      <p style="max-width:560px">Cada empresa acessa exclusivamente seus próprios dados. Limites de uso em tempo real. Cancelamento sem fricção.</p>
     </div>
-    <div class="diferenciais-grid">
-      <div class="diferencial-card">
-        <div class="diferencial-vs">vs. Assistente de IA genérico</div>
-        <h3>Base curada vs. IA genérica sem controle</h3>
-        <ul class="diferencial-lista">
-          <li>Normas específicas da Reforma (EC 132, LC 214, LC 227)</li>
-          <li>Base de normas atualizada em até 7 dias da publicação no DOU</li>
-          <li>Sem alucinação não controlada — bloqueio automático de respostas inconsistentes</li>
-          <li>Trilha de auditoria imutável de cada análise</li>
-          <li>Alerta quando o gestor replica a IA sem reflexão (Carimbo)</li>
+    <div class="security-badges reveal reveal-delay-1">
+      <div class="sec-badge">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div class="sec-badge-text">
+          <strong>Isolamento total por CNPJ</strong>
+          <span>Seus casos, documentos e histórico — só seus</span>
+        </div>
+      </div>
+      <div class="sec-badge">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        <div class="sec-badge-text">
+          <strong>LGPD · DPO designado</strong>
+          <span>Política, termos e SLA publicados na plataforma</span>
+        </div>
+      </div>
+      <div class="sec-badge">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div class="sec-badge-text">
+          <strong>Limites em tempo real</strong>
+          <span>Quantos casos restam, visível no painel</span>
+        </div>
+      </div>
+      <div class="sec-badge">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        <div class="sec-badge-text">
+          <strong>Cancelamento self-service</strong>
+          <span>Cancela pelo painel, sem falar com ninguém</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="features-new-grid reveal reveal-delay-2" style="margin-top:20px">
+      <div class="feature-card">
+        <div class="feature-card-icon ic-amber">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>Trial de 7 dias com casos reais</h3>
+        <p style="font-size:.875rem;margin-top:6px">3 Análises Documentadas em 6 passos completas + consultas rápidas ilimitadas. Suficiente para validar o valor em situações reais do seu dia a dia.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon ic-teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+        </div>
+        <h3>Visibilidade do consumo</h3>
+        <p style="font-size:.875rem;margin-top:6px">No plano Starter: 10 casos por mês. O painel exibe em tempo real quantos restam, com alerta visual antes de atingir o limite.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon ic-blue">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <h3>Alertas automáticos por e-mail</h3>
+        <p style="font-size:.875rem;margin-top:6px">Avisos nos momentos certos: 3 dias e 1 dia antes do trial expirar, em caso de falha de pagamento e após 14 dias de inatividade.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- DIFERENCIAIS -->
+<section class="section" id="diferenciais">
+  <div class="container">
+    <div class="reveal" style="margin-bottom:48px">
+      <span class="section-label">Por que o Orbis.tax</span>
+      <h2 style="max-width:560px">Feito para quem decide, não para quem experimenta</h2>
+    </div>
+
+    <div class="diff-grid reveal reveal-delay-1">
+      <div class="diff-col">
+        <div class="diff-header">
+          <span class="diff-vs-badge">vs. IA genérica</span>
+          <h3 style="font-size:.95rem">Assistente sem controle</h3>
+        </div>
+        <div class="diff-title">Limitações</div>
+        <ul class="diff-list negative">
+          <li>Normas da Reforma não atualizadas</li>
+          <li>Cita fontes com imprecisão</li>
+          <li>Sem protocolo auditável</li>
+          <li>Sem trilha de auditoria</li>
+          <li>Risco alto de alucinação fiscal</li>
         </ul>
       </div>
-      <div class="diferencial-card">
-        <div class="diferencial-vs">vs. Consultoria tradicional</div>
-        <h3>Disponibilidade 24/7 e custo previsível</h3>
-        <ul class="diferencial-lista">
-          <li>Consulta instantânea, sem agendamento ou prazo de retorno</li>
-          <li>Decisão documentada e rastreável em segundos</li>
-          <li>Custo fixo por usuário ativo — sem hora extra ou surpresas</li>
-          <li>Complemento ao especialista, não substituto — indica quando escalar</li>
-          <li>Base comum de conhecimento para toda a equipe</li>
+      <div class="diff-col" style="border-left:1px solid var(--border);border-right:1px solid var(--border)">
+        <div class="diff-header">
+          <span class="diff-vs-badge">vs. Consultoria</span>
+          <h3 style="font-size:.95rem">Especialista tradicional</h3>
+        </div>
+        <div class="diff-title">Limitações</div>
+        <ul class="diff-list negative">
+          <li>Depende de agendamento</li>
+          <li>Prazo de retorno imprevisível</li>
+          <li>Custo por hora elevado</li>
+          <li>Conhecimento não documentado</li>
+          <li>Base de conhecimento não compartilhada</li>
         </ul>
       </div>
-      <div class="diferencial-card">
-        <div class="diferencial-vs">vs. ERP com módulo fiscal</div>
-        <h3>Decisão estratégica, não emissão de documento</h3>
-        <ul class="diferencial-lista">
-          <li>Foco em interpretação normativa e tomada de decisão</li>
-          <li>Suporte ao planejamento tributário da Reforma</li>
-          <li>Não depende de integração com ERP — funciona como camada de inteligência</li>
-          <li>Protocolo de decisão estruturado com output acionável</li>
-          <li>Visões por stakeholder: diretoria, jurídico, operacional</li>
+      <div class="diff-col" style="background:var(--navy-3)">
+        <div class="diff-header">
+          <span class="diff-orbis-badge">Orbis.tax</span>
+          <h3 style="font-size:.95rem">Tax Decision Intelligence</h3>
+        </div>
+        <div class="diff-title" style="color:var(--amber);opacity:.7">O que você ganha</div>
+        <ul class="diff-list positive">
+          <li>Base curada EC 132, LC 214, LC 227</li>
+          <li>Atualização em até 7 dias do DOU</li>
+          <li>Protocolo P1→P6 auditável</li>
+          <li>Trilha imutável com Legal Hold</li>
+          <li>Disponível 24/7, sem agendamento</li>
+          <li>Custo fixo por usuário ativo</li>
+          <li>Complementa o especialista humano</li>
         </ul>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════════ PREÇOS ═══════════════════════════════ -->
-<section id="precos">
+<div class="section-divider"></div>
+
+<!-- PREÇOS -->
+<section class="section" id="precos">
   <div class="container">
-    <div class="section-header">
-      <span class="label">Planos</span>
+    <div class="reveal" style="text-align:center;margin-bottom:56px">
+      <span class="section-label">Planos</span>
       <h2>Comece grátis. Escale conforme sua equipe cresce.</h2>
-      <p>7 dias de teste grátis, sem cartão de crédito. Escolha o plano certo para o seu negócio e pague apenas quando quiser continuar.</p>
+      <p style="max-width:480px;margin:12px auto 0">7 dias de teste grátis, sem cartão de crédito. Pague apenas quando quiser continuar.</p>
     </div>
-    <div class="precos-grid">
 
-      <!-- ── STARTER — habilitado ── -->
-      <div class="preco-card destaque">
-        <div class="preco-badge">Disponível agora</div>
-        <div class="preco-plano">Starter</div>
-        <div style="margin-bottom:4px;">
-          <span style="font-size:2rem;font-weight:800;color:var(--azul-escuro);">R$ 297</span>
-          <span style="font-size:.9rem;font-weight:500;color:var(--cinza-medio);">/mês</span>
+    <div class="pricing-grid reveal reveal-delay-1">
+      <div class="price-card featured">
+        <div class="price-badge">DISPONÍVEL AGORA</div>
+        <div class="price-label">Starter</div>
+        <div class="price-amount">
+          <span class="price-currency">R$</span>
+          <span class="price-number">297</span>
+          <span class="price-period">/mês</span>
         </div>
-        <p class="preco-usuarios" style="color:var(--cinza-medio);">nos 2 primeiros meses · depois R$ 497/mês</p>
-        <hr class="preco-divider">
-        <ul class="preco-features" style="color:var(--cinza-texto);">
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Consultas ilimitadas (protocolo P1–P6)</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Base completa: EC 132, LC 214, LC 227</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Simuladores de impacto da Reforma</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Documentos acionáveis (notas de trabalho)</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Trilha de auditoria com rastreabilidade</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suporte por e-mail</li>
+        <div class="price-promo">
+          Nos 2 primeiros meses · depois R$ 497/mês
+        </div>
+        <div class="price-divider"></div>
+        <ul class="price-features">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Consultas rápidas ilimitadas
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            10 Análises Documentadas em 6 passos por mês
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Base completa: EC 132, LC 214, LC 227
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Simuladores de impacto da Reforma
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Documentos acionáveis com trilha de auditoria
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            CNPJ isolado · LGPD · SLA publicado
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Suporte por e-mail
+          </li>
         </ul>
-        <a href="/register" class="btn btn-primary" style="width:100%;justify-content:center;">Começar grátis — 7 dias</a>
-        <p class="preco-trial" style="color:var(--cinza-medio);">7 dias grátis · sem cartão de crédito</p>
+        <a href="/register" class="btn-primary btn-lg" style="display:block;text-align:center;width:100%">Começar grátis — 7 dias</a>
+        <div class="trial-note">sem cartão de crédito · cancela quando quiser</div>
       </div>
 
-      <!-- ── PRO — em breve ── -->
-      <div class="preco-card" style="opacity:.45;position:relative;pointer-events:none;">
-        <div class="preco-badge" style="background:#94a3b8;color:#fff;">Em breve</div>
-        <div class="preco-plano">Pro</div>
-        <div style="margin-bottom:4px;">
-          <span style="font-size:1.6rem;font-weight:800;color:rgba(255,255,255,.7);">R$ 990</span>
-          <span style="font-size:.9rem;font-weight:500;color:rgba(255,255,255,.45);">/mês</span>
+      <div class="price-card">
+        <div class="price-label">Pro</div>
+        <div class="price-amount">
+          <span class="price-currency">R$</span>
+          <span class="price-number">990</span>
+          <span class="price-period">/mês</span>
         </div>
-        <p class="preco-usuarios">2 a 5 usuários · pagamento mensal</p>
-        <hr class="preco-divider">
-        <ul class="preco-features">
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Tudo do Starter</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Painel compartilhado de equipe</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Visões por área (diretoria, jurídico, operacional)</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Monitor de novas normas com alertas</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Suporte prioritário</li>
+        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:24px">2 a 5 usuários · pagamento mensal</p>
+        <div class="price-divider"></div>
+        <ul class="price-features">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Tudo do Starter
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Painel compartilhado de equipe
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Visões por área (diretoria, jurídico, operacional)
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Monitor de novas normas com alertas
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Suporte prioritário
+          </li>
         </ul>
-        <span class="btn" style="width:100%;justify-content:center;display:flex;background:rgba(255,255,255,.08);color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.15);cursor:default;">Em breve</span>
-        <p class="preco-trial">Disponível em breve</p>
+        <div class="price-coming">Em breve · Disponível em breve</div>
       </div>
 
-      <!-- ── ENTERPRISE — em breve ── -->
-      <div class="preco-card" style="opacity:.45;position:relative;pointer-events:none;">
-        <div class="preco-badge" style="background:#94a3b8;color:#fff;">Em breve</div>
-        <div class="preco-plano">Enterprise</div>
-        <div style="margin-bottom:4px;">
-          <span style="font-size:1.6rem;font-weight:800;color:rgba(255,255,255,.7);">Sob consulta</span>
-        </div>
-        <p class="preco-usuarios">Acima de 5 usuários · contrato anual</p>
-        <hr class="preco-divider">
-        <ul class="preco-features">
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Tudo do Pro</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Base personalizada com normas do seu setor</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>SLA contratual e suporte dedicado</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Integração via API REST</li>
-          <li><span class="ck"><svg width="10" height="10" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Onboarding e gerente de conta dedicados</li>
+      <div class="price-card">
+        <div class="price-label">Enterprise</div>
+        <div class="price-number" style="font-family:var(--serif);font-size:2rem;color:var(--text-primary);margin-bottom:4px">Sob consulta</div>
+        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:24px">Acima de 5 usuários · contrato anual</p>
+        <div class="price-divider"></div>
+        <ul class="price-features">
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Tudo do Pro
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Base personalizada com normas do seu setor
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            SLA contratual e suporte dedicado
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Integração via API REST
+          </li>
+          <li>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Onboarding e gerente de conta dedicados
+          </li>
         </ul>
-        <span class="btn" style="width:100%;justify-content:center;display:flex;background:rgba(255,255,255,.08);color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.15);cursor:default;">Em breve</span>
-        <p class="preco-trial">Disponível em breve</p>
+        <div class="price-coming">Em breve · Disponível em breve</div>
       </div>
-
     </div>
   </div>
 </section>
 
-<!-- ══════════════════════ CTA FINAL ═══════════════════════════════ -->
-<section id="cta-final">
-  <div class="container">
+<!-- FINAL CTA -->
+<section class="final-cta">
+  <div class="final-cta-bg"></div>
+  <div style="position:relative">
+    <span class="section-label">Comece agora</span>
     <h2>Pronto para tomar decisões tributárias fundamentadas?</h2>
     <p>Comece seu trial de 7 dias. Sem cartão de crédito. Sem compromisso.</p>
-    <div class="cta-actions">
-      <a href="/register" class="btn btn-white btn-lg">Começar grátis — 7 dias</a>
-      <a href="mailto:admin@orbis.tax" class="btn btn-outline btn-lg" style="border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.9);">Falar com a equipe</a>
-      <!-- WhatsApp Business Orbis.tax — +55 11 99970-0215 -->
-      <a
-        href="https://wa.me/5511972521970?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20Orbis.tax"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn-whatsapp btn-lg"
-        aria-label="Conversar no WhatsApp"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-        </svg>
+    <div class="final-cta-actions">
+      <a href="/register" class="btn-primary btn-lg">Começar grátis — 7 dias</a>
+      <a href="mailto:contato@orbis.tax" class="btn-outline-lg">Falar com a equipe</a>
+    </div>
+    <div class="trial-details">
+      <span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Sem cartão de crédito
+      </span>
+      <span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        3 casos P1→P6 completos no trial
+      </span>
+      <span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Consultas rápidas ilimitadas
+      </span>
+      <span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Cancela quando quiser
+      </span>
+    </div>
+    <div style="margin-top:32px">
+      <a href="https://wa.me/5511972521970?text=Ol%C3%A1%2C%20tenho%20interesse%20no%20Orbis.tax" class="hero-wa" target="_blank" rel="noopener" style="display:inline-flex;margin:0 auto">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         Falar no WhatsApp
       </a>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════════════ DISCLAIMER ════════════════════════════ -->
-<section id="disclaimer">
-  <div class="container">
-    <div class="disclaimer-inner">
-      <div class="disclaimer-icon">
-        <svg width="18" height="18" fill="none" stroke="#7c4a00" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M12 3l9 16H3L12 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <p><strong>Aviso legal:</strong> As análises geradas pelo Orbis.tax não constituem parecer jurídico ou contábil. O sistema fornece apoio à decisão com base no base normativa disponível e no protocolo cognitivo implementado. A interpretação final, a responsabilidade pela decisão tomada e a assinatura de documentos fiscais são de exclusiva responsabilidade do profissional competente (advogado tributarista, contador ou consultor habilitado). O Orbis.tax não substitui assessoria jurídica especializada.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ FOOTER ══════════════════════════════ -->
+<!-- FOOTER -->
 <footer>
-  <div class="container">
-    <div class="footer-inner">
-      <a href="#" class="footer-logo">
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="32" height="32" rx="8" fill="#2E75B6"/>
-          <path d="M8 10h16M8 16h10M8 22h13" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="24" cy="22" r="4" fill="#F59E0B"/>
-          <path d="M22.5 22l1 1 2-2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Orbis.tax
-      </a>
-      <ul class="footer-links">
-        <li><a href="/termos-de-uso">Termos de Uso</a></li>
-        <li><a href="/politica-privacidade">Política de Privacidade</a></li>
-        <li><a href="/sla">SLA</a></li>
-      </ul>
-      <span class="footer-copy">© 2026 Orbis.tax · admin@orbis.tax</span>
-    </div>
+  <div class="footer-inner">
+    <span class="nav-logo" style="font-family:var(--serif)">Orbis<span style="color:var(--amber)">.</span>tax</span>
+    <nav class="footer-links">
+      <a href="/termos-de-uso">Termos de Uso</a>
+      <a href="/politica-privacidade">Política de Privacidade</a>
+      <a href="/sla">SLA</a>
+    </nav>
+    <span class="footer-copy">© 2026 Orbis.tax · contato@orbis.tax</span>
+  </div>
+  <div class="disclaimer">
+    <strong style="color:var(--text-muted)">Aviso legal:</strong> As análises geradas pelo Orbis.tax não constituem parecer jurídico ou contábil. O sistema fornece apoio à decisão com base na base normativa disponível e no protocolo cognitivo implementado. A interpretação final, a responsabilidade pela decisão tomada e a assinatura de documentos fiscais são de exclusiva responsabilidade do profissional competente (advogado tributarista, contador ou consultor habilitado). O Orbis.tax não substitui assessoria jurídica especializada.
   </div>
 </footer>
 
 <script>
-  // Mobile nav toggle
-  document.getElementById('menuBtn').addEventListener('click', () => {
-    document.getElementById('nav').classList.toggle('open');
-  });
+(function(){
+  // Nav scroll state
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }, {passive: true});
 
-  // Fechar nav ao clicar em link
-  document.querySelectorAll('#nav a').forEach(link => {
-    link.addEventListener('click', () => {
-      document.getElementById('nav').classList.remove('open');
+  // Reveal on scroll
+  const reveals = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if(e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
     });
-  });
+  }, {threshold: 0.1, rootMargin: '0px 0px -40px 0px'});
+  reveals.forEach(el => io.observe(el));
 
-  // Scroll suave para âncoras
-  document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', e => {
-      const id = a.getAttribute('href');
-      if (id === '#') return;
-      const el = document.querySelector(id);
-      if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth' }); }
-    });
-  });
+  // Protocol responsive layout fix
+  const protocolList = document.querySelector('.protocol-list');
+  function checkLayout() {
+    if(window.innerWidth < 900 && protocolList) {
+      protocolList.closest('[style*="grid-template-columns"]').style.gridTemplateColumns = '1fr';
+    }
+  }
+  checkLayout();
+  window.addEventListener('resize', checkLayout, {passive:true});
+})();
 </script>
 </body>
 </html>
