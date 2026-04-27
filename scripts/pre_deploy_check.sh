@@ -114,6 +114,31 @@ else
   ok "Nenhuma Voyage API key hardcoded detectada em src/"
 fi
 
+# ── 6. LINTERS AST ───────────────────────────────────────────
+echo ""
+echo "6. Linters AST"
+
+if .venv/bin/python -m pytest tests/linters/ --tb=no -q 2>/dev/null | grep -q "passed"; then
+  LINTER_RESULT=$(.venv/bin/python -m pytest tests/linters/ --tb=no -q 2>/dev/null | tail -1)
+  if echo "$LINTER_RESULT" | grep -q "failed"; then
+    fail "Linters AST: $LINTER_RESULT"
+  else
+    ok "Linters AST: $LINTER_RESULT"
+  fi
+else
+  warn "Linters AST: tests/linters/ não encontrado ou sem testes"
+fi
+
+# ── 7. RUFF ───────────────────────────────────────────────────
+echo ""
+echo "7. Ruff (Python linter — warning até Sprint 4)"
+
+if .venv/bin/ruff check src/ --quiet 2>/dev/null; then
+  ok "ruff: zero violações"
+else
+  warn "ruff: violações encontradas (não-bloqueante)"
+fi
+
 # ── RESULTADO ────────────────────────────────────────────────
 echo ""
 echo "============================="

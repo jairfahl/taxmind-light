@@ -46,6 +46,7 @@ def gerar_documento_hipotetico(
     model: str,
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> str:
     """Gera documento hipotético via LLM que responderia à query.
 
@@ -94,6 +95,7 @@ def gerar_documento_hipotetico(
             model=model,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
+            tenant_id=tenant_id,
         )
     except Exception:
         pass
@@ -112,6 +114,7 @@ def retrieve_com_hyde(
     cosine_weight: float = 0.7,
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
+    tenant_id: str | None = None,
 ) -> list[ChunkResultado]:
     """Executa retrieval usando embedding do documento hipotético.
 
@@ -127,6 +130,7 @@ def retrieve_com_hyde(
         cosine_weight=cosine_weight,
         bm25_weight=bm25_weight,
         data_referencia=data_referencia,
+        tenant_id=tenant_id,
     )
 
 
@@ -143,6 +147,7 @@ def executar_hyde_fallback(
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[ChunkResultado], bool]:
     """Executa HyDE fallback se condições forem atendidas.
 
@@ -158,7 +163,7 @@ def executar_hyde_fallback(
                 HYDE_THRESHOLD_SCORE)
 
     try:
-        hipotetico = gerar_documento_hipotetico(query, model, data_referencia, regime)
+        hipotetico = gerar_documento_hipotetico(query, model, data_referencia, regime, tenant_id=tenant_id)
 
         chunks_hyde = retrieve_com_hyde(
             documento_hipotetico=hipotetico,
@@ -169,6 +174,7 @@ def executar_hyde_fallback(
             cosine_weight=cosine_weight,
             bm25_weight=bm25_weight,
             data_referencia=data_referencia,
+            tenant_id=tenant_id,
         )
 
         if not chunks_hyde:

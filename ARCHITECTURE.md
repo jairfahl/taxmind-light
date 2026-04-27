@@ -58,7 +58,8 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 │   │   └── admin/
 │   │       ├── page.tsx          ← Painel admin redirect (ADMIN only) (URL: /admin)
 │   │       ├── usuarios/page.tsx  ← Gestão de usuários ADMIN
-│   │       └── mailing/page.tsx   ← Painel de leads: filtros trial/convertido/cancelado + exportação CSV + desconto por tenant
+│   │       ├── mailing/page.tsx   ← Painel de leads: filtros trial/convertido/cancelado + exportação CSV + desconto por tenant
+│   │       └── consumo/page.tsx   ← Dashboard de consumo de API: resumo, por dia, por tenant, por serviço (ADMIN)
 │   ├── components/
 │   │   ├── layout/
 │   │   │   ├── Sidebar.tsx       ← Nav dark navy (#1a2f4e) + logo + avatar com iniciais
@@ -118,7 +119,28 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 │   └── db/
 │       └── pool.py               ← ThreadedConnectionPool — get_conn/put_conn (USAR SEMPRE)
 ├── migrations/
-│   └── NNN_descricao.sql         ← Numeração sequencial obrigatória (última: 127_churn_email_tracking.sql)
+│   └── NNN_descricao.sql         ← Numeração sequencial obrigatória (última: 129_api_usage_tenant.sql)
+├── docs/                         ← ⭐ Contexto estruturado para agentes (Harness Engineering)
+│   ├── DOMAIN_FISCAL.md          ← Taxonomia EC132/LC214/LC227, PTF, terminologia IBS/CBS/IS
+│   ├── RAG_ARCHITECTURE.md       ← Pipeline completo, file paths, embedding lock, Loop Depth QG
+│   ├── CITATION_CONTRACT.md      ← Contrato JSON, M1-M4, THRESHOLDS_REGRESSAO
+│   ├── PROTOCOL_P1_P6.md         ← 6 passos, campos obrigatórios, P4 guard, nota histórica
+│   ├── QUALITY_SCORECARD.md      ← Dimensões, thresholds, módulos de qualidade
+│   ├── DATA_BOUNDARY.md          ← Multi-tenant, LGPD, legal hold, secrets
+│   ├── SCHEMA_REFERENCE.md       ← 31 tabelas com descrição
+│   ├── DEPLOY_REFERENCE.md       ← VPS, comandos, armadilhas, variáveis obrigatórias
+│   ├── FEEDBACK_LOOP.md          ← Processo erro→regra→linter
+│   └── HARNESS_METRICS.md        ← Baseline vs meta, estado atual, roadmap Sprint 4
+├── skills/                       ← ⭐ Guias de processo passo-a-passo
+│   ├── new-feature.md            ← Processo de nova feature
+│   ├── new-migration.md          ← Convenções e passos de migration SQL
+│   ├── pre-deploy.md             ← Checklist completo pré-deploy
+│   ├── diagnose-bug.md           ← Diagnóstico por camadas DB→API→nginx→Frontend
+│   ├── rag-pipeline.md           ← Como modificar pipeline RAG sem quebrar invariantes
+│   └── protocol-step.md          ← Como alterar protocolo respeitando P4/P5
+├── AGENTS.md                     ← ⭐ Mapa de contexto curto para agentes (< 100 linhas)
+├── pyproject.toml                ← ruff config (target py312, line-length 120)
+├── requirements-dev.txt          ← ruff, pytest, pytest-cov (não incluir no Docker prod)
 └── tests/
     ├── unit/                     ← test_[modulo].py + conftest.py (autouse mocks)
     │   └── test_iterative_quality_loop.py ← 17 testes do Loop Depth Quality Gate (sem LLM)
@@ -135,6 +157,11 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
     │   ├── test_api.py                  ← testes de integração gerais
     │   ├── test_outputs_api.py          ← testes de outputs C1..C5
     │   └── test_protocol_api.py         ← testes do protocolo P1→P6
+    ├── linters/                  ← ⭐ Linters AST (Harness Engineering — Sprint 2)
+    │   ├── test_embedding_lock.py       ← default voyage-3 em 3 arquivos
+    │   ├── test_p4_guard.py             ← hipotese_gestor/decisao_final nunca via LLM
+    │   ├── test_citation_contract.py    ← M1-M4, fundamento_legal, precisao_citacao>=0.90
+    │   └── test_ptf_enforcement.py      ← data_referencia + vigencia_inicio/fim
     ├── adversarial/              ← testes adversariais Sprint 3
     └── e2e/                      ← testes E2E (rodam manualmente)
 ```
@@ -181,6 +208,7 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 | `frontend/app/(auth)/verify-email/` | Verificação de e-mail com token — chama `/v1/auth/verify-email` com Suspense boundary | Zero lógica de negócio |
 | `frontend/app/(app)/assinar/` | Seleção PIX/Cartão e chamada `/v1/billing/subscribe` — redireciona para invoice_url Asaas | Zero lógica de cobrança |
 | `frontend/app/admin/mailing/` | Exibe leads com filtros, exporta CSV, aplica desconto por tenant | Zero lógica de autenticação |
+| `frontend/app/admin/consumo/` | Dashboard de consumo de API: resumo geral, custo por dia, por tenant, por serviço/modelo (ADMIN only) | Zero lógica de billing |
 | `frontend/components/layout/AuthGuard.tsx` | Redireciona não-autenticados para /login | Zero rendering de conteúdo |
 | `frontend/lib/api.ts` | Instância axios com `Authorization: Bearer` + `X-Api-Key` em todos os requests | Zero lógica de domínio |
 | `frontend/store/auth.ts` | Estado global de auth (user, token) com persistência localStorage | Zero chamadas diretas à API |
@@ -200,6 +228,7 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 | `src/cognitive/monitoramento_p6.py` | Ativa/encerra monitoramento P6, verifica premissas | Zero rendering |
 | `src/cognitive/aprendizado_institucional.py` | Extrai heurísticas de casos encerrados, expira com 6 meses | Zero rendering |
 | `src/billing/mau_tracker.py` | Registra e consulta MAU por análise realizada (DEC-08) | Zero lógica tributária |
+| `src/observability/usage.py` | Registra consumo de tokens (`registrar_uso`) com `tenant_id` para atribuição de custo por cliente | Zero lógica tributária |
 | `src/outputs/legal_hold.py` | Ativa/desativa/verifica Legal Hold em outputs e interações | Zero rendering |
 | `src/monitor/checker.py` | verificar_todas_fontes (concurrent, 30s timeout/fonte), listar_pendentes, atualizar_status | Zero rendering |
 | `src/monitor/sources.py` | Scrapers por tipo: dou, planalto, cgibs, nfe, rfb, sijut2 | Zero persistência |
@@ -265,7 +294,7 @@ Constantes em `engine.py`: `_QUALITY_MAX_ITER`, `_QUALITY_TOPK_SCALE`.
 ### Banco de Dados
 - **Toda nova feature que toca o banco começa por migration SQL versionada.**
   - Formato: `migrations/NNN_descricao.sql` (NNN = número sequencial de 3 dígitos)
-  - Migration mais recente: `127_churn_email_tracking.sql` → próxima será `128_...`
+  - Migration mais recente: `129_api_usage_tenant.sql` → próxima será `130_...`
 - **Nunca alterar schema sem migration.** ALTER TABLE direto no banco sem arquivo = proibido.
 - **Antes de migration com FK, verificar se tabela-pai existe** com `\d <tabela>` no container.
 
@@ -288,9 +317,10 @@ Constantes em `engine.py`: `_QUALITY_MAX_ITER`, `_QUALITY_TOPK_SCALE`.
 
 ### Gate de Qualidade
 - **RDMs da Onda 1.5 estão implementados** (HyDE, Multi-Query, Step-Back, Context Budget, Lockfile). Não reimplementar.
-- **737+ testes devem passar** após qualquer modificação.
-  - Comando: `.venv/bin/python -m pytest tests/unit/ tests/integration/ -v --tb=short`
+- **667+ testes devem passar** após qualquer modificação (referência 2026-04-25).
+  - Comando: `.venv/bin/python -m pytest tests/unit/ tests/integration/ tests/linters/ -v --tb=short`
   - Zero novas regressões toleradas — qualquer falha nova deve ser corrigida antes de entregar
+  - Linters AST: `tests/linters/` — 12 testes (embedding lock, P4 guard, citation contract, PTF)
 
 ---
 
@@ -394,6 +424,12 @@ Se a implementação exigir tocar arquivo fora do escopo declarado: **parar e re
 | Páginas legais públicas | ✅ Implementado Abril 2026 | /politica-privacidade, /termos-de-uso, /sla fora dos grupos (app)/(auth) — sem AuthGuard |
 | Landing page tagline refinada | ✅ Implementado Abril 2026 | "Feito para quem decide, não para quem experimenta" — menos agressiva, mesmo posicionamento |
 | ai_interactions não tem tenant_id | ✅ Confirmado Abril 2026 | Tabela tem user_id; joins por tenant devem passar por users: JOIN users u ON u.id = ai.user_id WHERE u.tenant_id = t.id |
+| Harness Engineering — docs/ + skills/ + linters | ✅ Implementado Abril 2026 | AGENTS.md (82L), CLAUDE.md reduzido (<200L), docs/ (10 arquivos), skills/ (6 arquivos), tests/linters/ (12 testes AST), pyproject.toml (ruff), scripts/quality_scorecard.sh |
+| Migration 128 — cases.tenant_id | ✅ Abril 2026 | ALTER TABLE cases ADD COLUMN tenant_id UUID — vincula casos ao tenant para enforcement de limites por plano |
+| Migration 129 — api_usage.tenant_id | ✅ Abril 2026 | ALTER TABLE api_usage ADD COLUMN tenant_id UUID — rastreio de consumo de API por cliente; índices em (tenant_id) e (tenant_id, created_at) |
+| Admin Consumo API (/admin/consumo) | ✅ Implementado Abril 2026 | GET /v1/admin/consumo + frontend/app/admin/consumo/page.tsx — dashboard ADMIN: resumo geral + por dia + por tenant + por serviço/modelo; filtro por período (1–365 dias) |
+| usage.py simplificado — tenant_id + sem alerta de crédito | ✅ Implementado Abril 2026 | Removidos CreditStatus, obter_status_creditos, API_CREDIT_LIMIT_USD; registrar_uso agora recebe tenant_id; /v1/credits simplificado (retorna total_gasto + detalhamento) |
+| engine.py propaga tenant_id pelo pipeline | ✅ Implementado Abril 2026 | _chamar_llm aceita tenant_id; _analisar_inner resolve tenant_id do user_id via SELECT antes do PTF; propagado para todas as chamadas LLM (SPD, MQ, SB, HyDE, loop quality) |
 
 ---
 

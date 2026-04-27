@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Mail } from "lucide-react";
+import { LayoutDashboard, Users, Mail, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/admin",          label: "Visão Geral", icon: LayoutDashboard },
   { href: "/admin/usuarios", label: "Usuários",    icon: Users },
   { href: "/admin/mailing",  label: "Mailing",     icon: Mail },
+  { href: "/admin/consumo",  label: "Consumo API", icon: BarChart3 },
 ];
 
 export function AdminNav() {

@@ -53,7 +53,7 @@ def _get_db_conn() -> psycopg2.extensions.connection:
     return get_conn()
 
 
-def _embed_query(query: str) -> list[float]:
+def _embed_query(query: str, tenant_id: str | None = None) -> list[float]:
     """Gera embedding da query via voyage-3 com retry em rate limit."""
     client = _get_voyage_client()
     delays = [2, 5, 10]
@@ -68,6 +68,7 @@ def _embed_query(query: str) -> list[float]:
                     service="voyageai",
                     model=EMBEDDING_MODEL,
                     input_tokens=total_tokens,
+                    tenant_id=tenant_id,
                 )
             except Exception:
                 pass
@@ -104,6 +105,7 @@ def retrieve(
     cosine_weight: float = 0.7,
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
+    tenant_id: str | None = None,
 ) -> list[ChunkResultado]:
     """
     Recupera os chunks mais relevantes para a query.
@@ -133,7 +135,7 @@ def retrieve(
 
     # 1. Embedding da query
     logger.info("Gerando embedding para query: %s", query[:80])
-    vetor_query = _embed_query(query)
+    vetor_query = _embed_query(query, tenant_id=tenant_id)
     vetor_str = "[" + ",".join(str(v) for v in vetor_query) + "]"
 
     # 2. Busca vetorial pgvector

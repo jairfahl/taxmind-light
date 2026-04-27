@@ -121,6 +121,7 @@ def _retrieve_para_norma(
     cosine_weight: float,
     bm25_weight: float,
     data_referencia: Optional[date] = None,
+    tenant_id: str | None = None,
 ) -> tuple[str, list[ChunkResultado]]:
     """Wrapper para retrieve() com norma_filter para uso em ThreadPoolExecutor."""
     try:
@@ -133,6 +134,7 @@ def _retrieve_para_norma(
             cosine_weight=cosine_weight,
             bm25_weight=bm25_weight,
             data_referencia=data_referencia,
+            tenant_id=tenant_id,
         )
         return norma, chunks
     except Exception as e:
@@ -149,6 +151,7 @@ def spd_retrieve(
     cosine_weight: float = 0.7,
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
+    tenant_id: str | None = None,
 ) -> SPDResult:
     """
     Retrieval per-document: chama retrieve() uma vez por norma e faz merge.
@@ -174,7 +177,7 @@ def spd_retrieve(
                 _retrieve_para_norma,
                 norma, query, top_k_por_norma, rerank_top_n,
                 excluir_tipos, cosine_weight, bm25_weight,
-                data_referencia,
+                data_referencia, tenant_id,
             ): norma
             for norma in normas
         }

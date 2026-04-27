@@ -56,6 +56,7 @@ def gerar_step_back_query(
     model: str,
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> str:
     """Gera versão abstrata da query para retrieval de princípios gerais.
 
@@ -106,6 +107,7 @@ def gerar_step_back_query(
             model=model,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
+            tenant_id=tenant_id,
         )
     except Exception:
         pass
@@ -126,6 +128,7 @@ def retrieve_com_step_back(
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
     proporcao_step_back: float = 0.6,
+    tenant_id: str | None = None,
 ) -> tuple[list[ChunkResultado], int, int]:
     """Retrieval duplo: step-back (princípio geral) + original (específico).
 
@@ -148,6 +151,7 @@ def retrieve_com_step_back(
         cosine_weight=cosine_weight,
         bm25_weight=bm25_weight,
         data_referencia=data_referencia,
+        tenant_id=tenant_id,
     )
 
     # Retrieval original (específico)
@@ -160,6 +164,7 @@ def retrieve_com_step_back(
         cosine_weight=cosine_weight,
         bm25_weight=bm25_weight,
         data_referencia=data_referencia,
+        tenant_id=tenant_id,
     )
 
     # Fusão: deduplicar por chunk_id, manter maior score_final
@@ -192,6 +197,7 @@ def executar_step_back_fallback(
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[ChunkResultado], bool, Optional[str]]:
     """Executa Step-Back se alta especificidade detectada.
 
@@ -204,7 +210,7 @@ def executar_step_back_fallback(
     logger.info("Step-Back ativado: alta especificidade detectada")
 
     try:
-        sb_query = gerar_step_back_query(query, model, data_referencia, regime)
+        sb_query = gerar_step_back_query(query, model, data_referencia, regime, tenant_id=tenant_id)
 
         chunks_sb, n_sb, n_esp = retrieve_com_step_back(
             query_original=query,
@@ -216,6 +222,7 @@ def executar_step_back_fallback(
             cosine_weight=cosine_weight,
             bm25_weight=bm25_weight,
             data_referencia=data_referencia,
+            tenant_id=tenant_id,
         )
 
         if not chunks_sb:

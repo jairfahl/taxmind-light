@@ -25,7 +25,8 @@ O Orbis.tax é uma plataforma de suporte à decisão tributária composta por do
 | **Simuladores** | Simuladores de carga tributária (IS, Split Payment, Reestruturação, Carga RT, Créditos IBS/CBS) |
 | **Documentos** | Geração de documentos acionáveis (Alerta, Nota de Trabalho, Recomendação Formal, Dossiê, Compartilhamento) com visões por stakeholder |
 | **Base de Conhecimento** | Upload de PDFs (INs, Resoluções, Pareceres), dedup por hash MD5, ingestão assíncrona, monitor de fontes oficiais |
-| **Admin** | Gestão de usuários (ADMIN only): criar/ativar/desativar, redefinir senhas, monitorar consumo, mailing com filtros e exportação CSV |
+| **Admin** | Gestão de usuários (ADMIN only): criar/ativar/desativar, redefinir senhas, mailing com filtros e exportação CSV |
+| **Consumo API** | Dashboard ADMIN: custo total, por dia, por tenant e por serviço/modelo — filtro por período (1–365 dias) |
 | **Assinar** | Página de assinatura do plano Starter (R$497/mês) via Asaas (PIX ou Cartão) |
 
 ### Fluxo de Cadastro
@@ -123,7 +124,7 @@ done
 ```
 
 Admin padrão criado pela migration 100: `admin@orbis.tax`
-Última migration: `125_reset_password_token.sql`
+Última migration: `129_api_usage_tenant.sql`
 
 ### 4. Ingestão inicial dos PDFs (opcional)
 
@@ -258,7 +259,8 @@ tribus-ai-light/
 │   │   └── admin/
 │   │       ├── page.tsx           # Painel admin (redirect)
 │   │       ├── usuarios/          # Gestão de usuários
-│   │       └── mailing/           # Painel de leads com filtros e exportação CSV
+│   │       ├── mailing/           # Painel de leads com filtros e exportação CSV
+│   │       └── consumo/           # Dashboard de consumo de API (ADMIN)
 │   ├── components/
 │   │   ├── layout/                # AuthGuard, Sidebar, AdminGuard, OnboardingModal
 │   │   ├── protocolo/             # P1..P6 components
@@ -276,10 +278,15 @@ tribus-ai-light/
 │   ├── monitor/                   # Monitor DOU/PGFN/RFB/SIJUT2
 │   ├── ingest/                    # Pipeline ingestão assíncrona
 │   └── db/pool.py                 # ThreadedConnectionPool
-├── migrations/                    # NNN_descricao.sql (última: 124_tenant_desconto.sql)
+├── migrations/                    # NNN_descricao.sql (última: 127_churn_email_tracking.sql)
+├── docs/                          # Contexto estruturado para agentes (Harness Engineering)
+├── skills/                        # Guias de processo (new-feature, migration, deploy, debug…)
+├── AGENTS.md                      # Mapa de contexto curto para agentes (< 100 linhas)
+├── pyproject.toml                 # ruff config (linter Python)
 └── tests/
     ├── unit/                      # Mocks obrigatórios (sem chamadas externas)
     ├── integration/               # Testes de integração com TestClient
+    ├── linters/                   # Linters AST: embedding lock, P4 guard, citation, PTF
     ├── adversarial/               # Testes adversariais Sprint 3
     └── e2e/                       # Rodam manualmente
 ```
@@ -332,6 +339,7 @@ tribus-ai-light/
 | PATCH | `/v1/admin/tenants/{id}/desconto` | Aplicar desconto a tenant |
 | GET | `/v1/admin/usuarios` | Listar usuários (ADMIN) |
 | POST | `/v1/admin/usuarios` | Criar usuário (ADMIN) |
+| GET | `/v1/admin/consumo` | Dashboard de consumo de API por dia/tenant/serviço (query param: `dias` 1–365) |
 
 ---
 

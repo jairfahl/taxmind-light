@@ -553,6 +553,7 @@ def _chamar_llm(
     riscos_fiscais: Optional[list[str]] = None,
     fatos_cliente: Optional[dict] = None,
     _escalated: bool = False,
+    tenant_id: Optional[str] = None,
 ) -> dict:
     """Chama o LLM e retorna o JSON parseado.
 
@@ -623,6 +624,7 @@ def _chamar_llm(
             model=model,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
+            tenant_id=tenant_id,
         )
     except Exception as _usage_err:
         logger.debug("Registro de uso ignorado: %s", _usage_err)
@@ -651,6 +653,7 @@ def _chamar_llm(
                 riscos_fiscais=riscos_fiscais,
                 fatos_cliente=fatos_cliente,
                 _escalated=True,
+                tenant_id=tenant_id,
             )
         raise RuntimeError(
             f"LLM output truncado (stop_reason=max_tokens, model={model}, "
@@ -914,6 +917,21 @@ def _analisar_inner(
     fatos_cliente: Optional[dict] = None,
 ) -> AnaliseResult:
     """Corpo interno do pipeline de análise (chamado por analisar com try/finally)."""
+    # Resolver tenant_id a partir do user_id para rastreio de consumo
+    _tenant_id: Optional[str] = None
+    if user_id:
+        try:
+            with conn.cursor() as _tcur:
+                _tcur.execute(
+                    "SELECT tenant_id FROM users WHERE id = %s LIMIT 1",
+                    (user_id,),
+                )
+                _trow = _tcur.fetchone()
+                if _trow:
+                    _tenant_id = str(_trow[0])
+        except Exception as _te:
+            logger.debug("Falha ao resolver tenant_id para user %s: %s", user_id, _te)
+
     # PTF — Pre-filter Temporal: extrair data de referência da query
     data_ref = extrair_data_referencia(query)
     _is_future = is_future_scenario(data_ref)
@@ -947,7 +965,7 @@ def _analisar_inner(
         return retrieve(q, top_k=p.top_k, rerank_top_n=p.rerank_top_n,
                         norma_filter=norma_filter, excluir_tipos=_excluir,
                         cosine_weight=p.cosine_weight, bm25_weight=p.bm25_weight,
-                        data_referencia=data_ref)
+                        data_referencia=data_ref, tenant_id=_tenant_id)
 
     if decisao.strategy == SPDStrategy.SPD:
         # SPD: retrieval per-document
@@ -960,6 +978,7 @@ def _analisar_inner(
             cosine_weight=params.cosine_weight,
             bm25_weight=params.bm25_weight,
             data_referencia=data_ref,
+            tenant_id=_tenant_id,
         )
         chunks = spd_result.chunks_merged[:params.top_k]
     elif decompose:
@@ -1041,6 +1060,7 @@ def _analisar_inner(
                     bm25_weight=_iter_params.bm25_weight,
                     data_referencia=data_ref,
                     regime=_regime,
+                    tenant_id=_tenant_id,
                 )
                 _tool_activated = _multi_query_activated
             except Exception as e:
@@ -1062,6 +1082,7 @@ def _analisar_inner(
                     bm25_weight=_iter_params.bm25_weight,
                     data_referencia=data_ref,
                     regime=_regime,
+                    tenant_id=_tenant_id,
                 )
                 _tool_activated = _step_back_activated
             except Exception as e:
@@ -1083,6 +1104,7 @@ def _analisar_inner(
                     bm25_weight=_iter_params.bm25_weight,
                     data_referencia=data_ref,
                     regime=_regime,
+                    tenant_id=_tenant_id,
                 )
             except Exception as e:
                 logger.warning("HyDE ignorado: %s", e)
@@ -1106,6 +1128,7 @@ def _analisar_inner(
                     cosine_weight=_iter_params.cosine_weight,
                     bm25_weight=_iter_params.bm25_weight,
                     data_referencia=data_ref,
+                    tenant_id=_tenant_id,
                 )
                 if len({c.norma_codigo for c in spd_result.chunks_merged}) > 1:
                     chunks = spd_result.chunks_merged[:_iter_params.top_k]
@@ -1186,7 +1209,7 @@ def _analisar_inner(
                         casos_similares=casos_similares,
                         metodos_selecionados=metodos_selecionados,
                         premissas=premissas, riscos_fiscais=riscos_fiscais,
-                        fatos_cliente=fatos_cliente)
+                        fatos_cliente=fatos_cliente, tenant_id=_tenant_id)
 
     # Ativar CoT se necessário e re-chamar
     if _precisa_cot(qualidade, dados):
@@ -1196,7 +1219,7 @@ def _analisar_inner(
                             casos_similares=casos_similares,
                             metodos_selecionados=metodos_selecionados,
                             premissas=premissas, riscos_fiscais=riscos_fiscais,
-                            fatos_cliente=fatos_cliente)
+                            fatos_cliente=fatos_cliente, tenant_id=_tenant_id)
 
     # P4 — Anti-alucinação
     anti = AntiAlucinacaoResult()
@@ -1228,7 +1251,7 @@ def _analisar_inner(
             casos_similares=casos_similares,
             metodos_selecionados=metodos_selecionados,
             premissas=premissas, riscos_fiscais=riscos_fiscais,
-            fatos_cliente=fatos_cliente,
+            fatos_cliente=fatos_cliente, tenant_id=_tenant_id,
         )
         m4_ok2, m4_flags2 = _verificar_m4_consistencia(dados_corrigido)
         if m4_ok2:

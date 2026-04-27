@@ -72,6 +72,7 @@ def gerar_variacoes_query(
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
     n: int = MULTI_QUERY_N,
+    tenant_id: str | None = None,
 ) -> list[str]:
     """Gera N reformulações técnicas da query original via LLM.
 
@@ -122,6 +123,7 @@ def gerar_variacoes_query(
             model=model,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
+            tenant_id=tenant_id,
         )
     except Exception:
         pass
@@ -150,6 +152,7 @@ def retrieve_multi_query(
     cosine_weight: float = 0.7,
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[ChunkResultado], int, int]:
     """Executa retrieval paralelo para N variações e funde resultados.
 
@@ -166,6 +169,7 @@ def retrieve_multi_query(
             cosine_weight=cosine_weight,
             bm25_weight=bm25_weight,
             data_referencia=data_referencia,
+            tenant_id=tenant_id,
         )
 
     todos_chunks: list[ChunkResultado] = []
@@ -216,6 +220,7 @@ def executar_multi_query_fallback(
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
     regime: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> tuple[list[ChunkResultado], bool, int]:
     """Executa Multi-Query se vocabulário coloquial detectado.
 
@@ -228,7 +233,7 @@ def executar_multi_query_fallback(
     logger.info("Multi-Query ativado: vocabulário coloquial detectado")
 
     try:
-        variacoes = gerar_variacoes_query(query, model, data_referencia, regime)
+        variacoes = gerar_variacoes_query(query, model, data_referencia, regime, tenant_id=tenant_id)
 
         chunks_mq, variacoes_ok, total_bruto = retrieve_multi_query(
             variacoes=variacoes,
@@ -239,6 +244,7 @@ def executar_multi_query_fallback(
             cosine_weight=cosine_weight,
             bm25_weight=bm25_weight,
             data_referencia=data_referencia,
+            tenant_id=tenant_id,
         )
 
         if not chunks_mq:

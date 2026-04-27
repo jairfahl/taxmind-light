@@ -65,15 +65,6 @@ def validate_env() -> None:
             except ValueError:
                 errors.append(f"[INVALID] {var}='{raw}' — deve ser um inteiro")
 
-    api_credit = os.getenv("API_CREDIT_LIMIT_USD")
-    if api_credit is not None:
-        try:
-            float(api_credit)
-        except ValueError:
-            errors.append(
-                f"[INVALID] API_CREDIT_LIMIT_USD='{api_credit}' — deve ser um número decimal"
-            )
-
     # ── Resultado ─────────────────────────────────────────────────────────────
     if errors:
         print("\n" + "=" * 60, file=sys.stderr)

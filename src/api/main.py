@@ -577,20 +577,16 @@ def auth_onboarding(req: OnboardingRequest):
 
 @app.get("/v1/credits", dependencies=[Depends(verificar_token_api)])
 def get_credits():
-    """Status de creditos de API com alerta quando saldo <= US$0.50."""
+    """Resumo de consumo de créditos de API."""
     try:
-        from src.observability.usage import obter_detalhamento, obter_status_creditos
-        status = obter_status_creditos()
+        from src.observability.usage import obter_detalhamento
         detalhamento = obter_detalhamento()
+        total_gasto = sum(d["estimated_cost"] for d in detalhamento)
     except Exception as e:
         logger.error("Erro em /v1/credits: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     return {
-        "total_gasto": status.total_gasto,
-        "limite": status.limite,
-        "saldo_restante": status.saldo_restante,
-        "alerta": status.alerta,
-        "mensagem": status.mensagem,
+        "total_gasto": round(total_gasto, 4),
         "detalhamento": detalhamento,
     }
 
@@ -3203,6 +3199,106 @@ def admin_mailing_export():
 
     except Exception as e:
         logger.error("Erro em /v1/admin/mailing/export: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+@app.get("/v1/admin/consumo", dependencies=[Depends(verificar_token_api)])
+def admin_consumo(
+    dias: int = Query(30, ge=1, le=365, description="Período em dias"),
+):
+    """Dashboard de consumo de API: resumo, por dia, por tenant, por serviço."""
+    logger.info("GET /v1/admin/consumo dias=%d", dias)
+    conn = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        # Resumo geral
+        cur.execute(
+            """SELECT COALESCE(SUM(estimated_cost), 0),
+                      COUNT(*),
+                      MIN(created_at)::date,
+                      MAX(created_at)::date
+               FROM api_usage
+               WHERE created_at >= NOW() - INTERVAL '%s days'""",
+            (dias,),
+        )
+        row = cur.fetchone()
+        resumo = {
+            "total_gasto": round(float(row[0]), 4),
+            "total_chamadas": int(row[1]),
+            "periodo_inicio": row[2].isoformat() if row[2] else None,
+            "periodo_fim": row[3].isoformat() if row[3] else None,
+        }
+
+        # Por dia
+        cur.execute(
+            """SELECT created_at::date AS dia,
+                      COALESCE(SUM(estimated_cost), 0) AS custo,
+                      COUNT(*) AS chamadas
+               FROM api_usage
+               WHERE created_at >= NOW() - INTERVAL '%s days'
+               GROUP BY dia
+               ORDER BY dia DESC""",
+            (dias,),
+        )
+        por_dia = [
+            {"dia": r[0].isoformat(), "custo": round(float(r[1]), 4), "chamadas": int(r[2])}
+            for r in cur.fetchall()
+        ]
+
+        # Por tenant
+        cur.execute(
+            """SELECT a.tenant_id,
+                      COALESCE(t.razao_social, 'Sistema (sem tenant)') AS razao_social,
+                      COALESCE(SUM(a.estimated_cost), 0) AS custo,
+                      COUNT(*) AS chamadas
+               FROM api_usage a
+               LEFT JOIN tenants t ON t.id = a.tenant_id
+               WHERE a.created_at >= NOW() - INTERVAL '%s days'
+               GROUP BY a.tenant_id, t.razao_social
+               ORDER BY custo DESC""",
+            (dias,),
+        )
+        por_tenant = [
+            {
+                "tenant_id": str(r[0]) if r[0] else None,
+                "razao_social": r[1],
+                "custo": round(float(r[2]), 4),
+                "chamadas": int(r[3]),
+            }
+            for r in cur.fetchall()
+        ]
+
+        # Por serviço/modelo
+        cur.execute(
+            """SELECT service, model,
+                      COALESCE(SUM(estimated_cost), 0) AS custo,
+                      COUNT(*) AS chamadas
+               FROM api_usage
+               WHERE created_at >= NOW() - INTERVAL '%s days'
+               GROUP BY service, model
+               ORDER BY custo DESC""",
+            (dias,),
+        )
+        por_servico = [
+            {"service": r[0], "model": r[1], "custo": round(float(r[2]), 4), "chamadas": int(r[3])}
+            for r in cur.fetchall()
+        ]
+
+        cur.close()
+        return {
+            "resumo": resumo,
+            "por_dia": por_dia,
+            "por_tenant": por_tenant,
+            "por_servico": por_servico,
+        }
+
+    except Exception as e:
+        logger.error("Erro em /v1/admin/consumo: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     finally:
         if conn:
