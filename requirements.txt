@@ -9,7 +9,7 @@ markdownify==1.2.2
 python-dotenv==1.0.1
 rank-bm25==0.2.2
 tiktoken==0.7.0
-pydantic==2.6.0
+pydantic==2.13.3
 # Sprint 2
 fastapi==0.111.0
 uvicorn==0.29.0
