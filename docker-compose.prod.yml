@@ -32,6 +32,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - tribus-ai-net
 
@@ -45,7 +51,8 @@ services:
         - NEXT_PUBLIC_API_INTERNAL_KEY=${API_INTERNAL_KEY}
     restart: always
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - tribus-ai-net
 
@@ -61,8 +68,10 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:
-      - api
-      - ui
+      api:
+        condition: service_healthy
+      ui:
+        condition: service_started
     networks:
       - tribus-ai-net
 
