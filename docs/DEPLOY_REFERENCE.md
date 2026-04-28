@@ -73,9 +73,9 @@ O script verifica: git status, testes backend, build frontend, LOCKFILE_MODE vá
 | `RESEND_API_KEY` | Obrigatória para e-mail de verificação |
 | `ASAAS_API_KEY` | Iniciar com `$$` (escape docker compose) |
 | `LOCKFILE_MODE` | `WARN` (não `ENFORCE`) |
-| `EVOLUTION_API_URL` | URL base da instância Evolution API (ex: `https://evo.orbis.tax`) |
-| `EVOLUTION_API_KEY` | API key da instância Evolution API |
-| `EVOLUTION_INSTANCE` | Nome da instância criada no painel Evolution |
+| `ZAPI_INSTANCE_ID` | ID da instância no painel Z-API |
+| `ZAPI_TOKEN` | Token da instância no painel Z-API |
+| `ZAPI_SECURITY_TOKEN` | Token de segurança (opcional, recomendado) |
 
 ---
 

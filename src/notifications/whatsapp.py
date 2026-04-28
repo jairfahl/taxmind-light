@@ -1,8 +1,8 @@
 """
-src/notifications/whatsapp.py — Envio de mensagens WhatsApp via Evolution API.
+src/notifications/whatsapp.py — Envio de mensagens WhatsApp via Z-API.
 
 Usado para notificações internas ao admin (ex: novo assinante confirmado).
-Variáveis obrigatórias: EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE.
+Variáveis obrigatórias: ZAPI_INSTANCE_ID, ZAPI_TOKEN.
 """
 
 import logging
@@ -12,27 +12,31 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-EVOLUTION_API_URL      = os.getenv("EVOLUTION_API_URL", "")
-EVOLUTION_API_KEY      = os.getenv("EVOLUTION_API_KEY", "")
-EVOLUTION_INSTANCE     = os.getenv("EVOLUTION_INSTANCE", "")
-ADMIN_WA_NUMBER        = "5511972521970"
+ADMIN_WA_NUMBER = "5511972521970"
 
 
 def enviar_whatsapp_admin(mensagem: str) -> None:
     """
-    Envia mensagem de texto para o número fixo do admin via Evolution API.
+    Envia mensagem de texto para o número fixo do admin via Z-API.
     Falha silenciosa com log de erro — nunca deve quebrar o fluxo principal.
     """
-    if not all([EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE]):
-        logger.warning("WhatsApp admin: variáveis Evolution API não configuradas — mensagem não enviada.")
+    instance_id = os.getenv("ZAPI_INSTANCE_ID", "")
+    token       = os.getenv("ZAPI_TOKEN", "")
+
+    if not all([instance_id, token]):
+        logger.warning("WhatsApp admin: variáveis Z-API não configuradas — mensagem não enviada.")
         return
 
-    url = f"{EVOLUTION_API_URL.rstrip('/')}/message/sendText/{EVOLUTION_INSTANCE}"
+    url = f"https://api.z-api.io/instances/{instance_id}/token/{token}/send-text"
     payload = {
-        "number": ADMIN_WA_NUMBER,
-        "text":   mensagem,
+        "phone": ADMIN_WA_NUMBER,
+        "message": mensagem,
     }
-    headers = {"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json"}
+
+    security_token = os.getenv("ZAPI_SECURITY_TOKEN", "")
+    if security_token:
+        headers["Client-Token"] = security_token
 
     try:
         resp = httpx.post(url, json=payload, headers=headers, timeout=10)

@@ -101,8 +101,9 @@ Pipeline: `PTF → Adaptive → SPD → Retrieve → CRAG → [MQ|SB|HyDE] → Q
 | **Harness Engineering — AGENTS.md + docs/ + linters + skills** | ✅ Abril 2026 |
 | **Admin Consumo API — /admin/consumo + GET /v1/admin/consumo (migrations 128+129)** | ✅ Abril 2026 |
 | **tenant_id no pipeline engine.py + usage.py simplificado** | ✅ Abril 2026 |
+| **WhatsApp provider: Evolution API → Z-API (src/notifications/whatsapp.py)** | ✅ Abril 2026 |
 
-- **Suite de testes:** 667 passando, ~62 falhas conhecidas pré-existentes (referência 2026-04-25)
+- **Suite de testes:** 744 passando, ~9 falhas conhecidas pré-existentes (referência 2026-04-28)
 - **Linters AST:** `tests/linters/` — 12 testes: embedding lock, P4 guard, citation contract, PTF
 - **Última migration:** `129_api_usage_tenant.sql` → próxima: `130_...`
 

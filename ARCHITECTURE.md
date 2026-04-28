@@ -429,6 +429,7 @@ Se a implementação exigir tocar arquivo fora do escopo declarado: **parar e re
 | Migration 129 — api_usage.tenant_id | ✅ Abril 2026 | ALTER TABLE api_usage ADD COLUMN tenant_id UUID — rastreio de consumo de API por cliente; índices em (tenant_id) e (tenant_id, created_at) |
 | Admin Consumo API (/admin/consumo) | ✅ Implementado Abril 2026 | GET /v1/admin/consumo + frontend/app/admin/consumo/page.tsx — dashboard ADMIN: resumo geral + por dia + por tenant + por serviço/modelo; filtro por período (1–365 dias) |
 | usage.py simplificado — tenant_id + sem alerta de crédito | ✅ Implementado Abril 2026 | Removidos CreditStatus, obter_status_creditos, API_CREDIT_LIMIT_USD; registrar_uso agora recebe tenant_id; /v1/credits simplificado (retorna total_gasto + detalhamento) |
+| WhatsApp provider — Evolution API → Z-API | ✅ Implementado Abril 2026 | Evolution API (self-hosted) descartada: IP Hostinger bloqueado pelo WhatsApp no handshake Baileys. Migração para Z-API gerenciado (z-api.io). Interface `enviar_whatsapp_admin()` inalterada; vars EVOLUTION_* → ZAPI_INSTANCE_ID + ZAPI_TOKEN + ZAPI_SECURITY_TOKEN; sem container adicional em prod |
 | engine.py propaga tenant_id pelo pipeline | ✅ Implementado Abril 2026 | _chamar_llm aceita tenant_id; _analisar_inner resolve tenant_id do user_id via SELECT antes do PTF; propagado para todas as chamadas LLM (SPD, MQ, SB, HyDE, loop quality) |
 
 ---
