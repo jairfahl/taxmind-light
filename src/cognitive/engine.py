@@ -17,6 +17,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 from src.db.pool import get_conn, put_conn
+from src.security.prompt_sanitizer import sanitize as _sanitize_input, PromptInjectionError
 
 from src.quality.engine import QualidadeResult, QualidadeStatus, avaliar_qualidade
 from src.rag.adaptive import classificar_query, obter_params_adaptativos
@@ -884,6 +885,12 @@ def analisar(
         casos_similares: lista de casos concluídos similares para retroalimentação.
                          Cada item contém: titulo, premissas, decisao_final, resultado_real, aprendizado.
     """
+    # Camada de segurança: validar inputs do usuário antes de enviar ao LLM (OWASP LLM01)
+    _sanitize_input(query, "query")
+    if premissas:
+        for _i, _p in enumerate(premissas):
+            _sanitize_input(_p, f"premissa[{_i}]")
+
     t0 = time.time()
     conn = _get_db_conn()
     try:

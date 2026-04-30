@@ -31,7 +31,7 @@ services:
     env_file: .env
     environment:
       - API_BASE_URL=http://api:8000
-      - DATABASE_URL=postgresql://taxmind:taxmind123@db:5432/taxmind_db
+      - DATABASE_URL=${DOCKER_DATABASE_URL}
     volumes:
       - ./src:/app/src
     depends_on:

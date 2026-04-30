@@ -160,11 +160,15 @@ async def lifespan(app):
     scheduler.shutdown()
 
 
+_is_dev = os.getenv("ENV") == "dev"
 app = FastAPI(
     title="Tribus-AI API",
     description="Motor cognitivo para análise da Reforma Tributária brasileira",
     version="2.0.0",
     lifespan=lifespan,
+    docs_url="/v1/docs" if _is_dev else None,
+    redoc_url="/v1/redoc" if _is_dev else None,
+    openapi_url="/v1/openapi.json" if _is_dev else None,
 )
 
 _prod_origins = ["https://orbis.tax", "https://www.orbis.tax"]

@@ -65,6 +65,27 @@ def put_conn(conn: psycopg2.extensions.connection) -> None:
             pass
 
 
+def set_tenant_id(conn: psycopg2.extensions.connection, tenant_id: str | None) -> None:
+    """
+    Define app.tenant_id na sessão PostgreSQL para enforçar RLS (migration 133).
+
+    Chamar ANTES de executar queries em contexto autenticado.
+    Chamar com tenant_id=None (ou '') para limpar ao devolver ao pool.
+
+    Uso:
+        conn = get_conn()
+        set_tenant_id(conn, payload["tenant_id"])
+        try:
+            ...queries...
+        finally:
+            set_tenant_id(conn, None)
+            put_conn(conn)
+    """
+    value = str(tenant_id) if tenant_id else ""
+    with conn.cursor() as cur:
+        cur.execute("SET LOCAL app.tenant_id = %s", (value,))
+
+
 def close_pool() -> None:
     """Fecha todas as conexões do pool (usar no shutdown da app)."""
     global _pool

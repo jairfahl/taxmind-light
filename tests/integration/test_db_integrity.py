@@ -22,13 +22,14 @@ Constraint of interest:
     chk_output_imutavel: CHECK (classe NOT IN ('dossie_decisao','material_compartilhavel')
                                 OR imutavel = true)
 """
+import os
 import pytest
 import psycopg2
 import psycopg2.errorcodes
 from psycopg2 import errors as pg_errors
 from datetime import date, timedelta
 
-DB_URL = "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db"
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db")
 
 
 @pytest.fixture(scope="module")

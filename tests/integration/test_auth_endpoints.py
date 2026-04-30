@@ -9,12 +9,15 @@ Testes de integração para os endpoints de autenticação:
 Requer banco PostgreSQL rodando em localhost:5436.
 Usuários de teste são criados/removidos pelo conftest.py (scope=session).
 """
+import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api.main import app
+
+_DB_URL = os.environ.get("DATABASE_URL", "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db")
 
 # Cliente síncrono compartilhado (sem bypass de auth para TC-AUTH-05)
 _raw_client = TestClient(app, raise_server_exceptions=False)
@@ -175,7 +178,7 @@ def test_sessao_unica_segundo_login_invalida_anterior(qa_user_id):
     from datetime import datetime, timezone
 
     # 1. Buscar usuário atual e gerar JWT com session_id atual do DB
-    conn = psycopg2.connect("postgresql://taxmind:taxmind123@localhost:5436/taxmind_db")
+    conn = psycopg2.connect(_DB_URL)
     with conn.cursor() as cur:
         cur.execute(
             "SELECT session_id FROM users WHERE id = %s LIMIT 1", (qa_user_id,)
@@ -198,7 +201,7 @@ def test_sessao_unica_segundo_login_invalida_anterior(qa_user_id):
 
     # 2. Simular segundo login: atualizar session_id no DB (invalida JWT antigo)
     novo_session_id = str(_uuid.uuid4())
-    conn2 = psycopg2.connect("postgresql://taxmind:taxmind123@localhost:5436/taxmind_db")
+    conn2 = psycopg2.connect(_DB_URL)
     with conn2.cursor() as cur:
         cur.execute(
             "UPDATE users SET session_id = %s WHERE id = %s",
@@ -229,7 +232,7 @@ def test_sessao_unica_segundo_login_invalida_anterior(qa_user_id):
         if original_sessao is not None:
             _app.dependency_overrides[verificar_sessao] = original_sessao
         # Restaurar session_id original para não quebrar testes subsequentes
-        conn3 = psycopg2.connect("postgresql://taxmind:taxmind123@localhost:5436/taxmind_db")
+        conn3 = psycopg2.connect(_DB_URL)
         with conn3.cursor() as cur:
             cur.execute(
                 "UPDATE users SET session_id = %s WHERE id = %s",
@@ -251,9 +254,7 @@ def test_billing_desconto_patch(qa_user_id):
     Usa tenant_id do usuário QA (se existir). Se não houver tenant, skip.
     """
     import psycopg2
-    conn = psycopg2.connect(
-        "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db"
-    )
+    conn = psycopg2.connect(_DB_URL)
     with conn.cursor() as cur:
         cur.execute("SELECT tenant_id FROM users WHERE id = %s LIMIT 1", (qa_user_id,))
         row = cur.fetchone()
@@ -280,9 +281,7 @@ def test_billing_subscribe_tenant_sem_assinatura(qa_user_id):
     """
     import unittest.mock as mock
     import psycopg2
-    conn = psycopg2.connect(
-        "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db"
-    )
+    conn = psycopg2.connect(_DB_URL)
     with conn.cursor() as cur:
         cur.execute("SELECT tenant_id FROM users WHERE id = %s LIMIT 1", (qa_user_id,))
         row = cur.fetchone()
@@ -322,9 +321,7 @@ def test_billing_subscribe_tenant_ja_assinante(qa_user_id):
     """
     import unittest.mock as mock
     import psycopg2
-    conn = psycopg2.connect(
-        "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db"
-    )
+    conn = psycopg2.connect(_DB_URL)
     with conn.cursor() as cur:
         cur.execute("SELECT tenant_id FROM users WHERE id = %s LIMIT 1", (qa_user_id,))
         row = cur.fetchone()
@@ -348,9 +345,7 @@ def test_billing_subscribe_tenant_ja_assinante(qa_user_id):
     assert resp.status_code == 409, resp.text
 
     # Limpar assinatura fake
-    conn2 = psycopg2.connect(
-        "postgresql://taxmind:taxmind123@localhost:5436/taxmind_db"
-    )
+    conn2 = psycopg2.connect(_DB_URL)
     with conn2.cursor() as cur:
         cur.execute(
             "UPDATE tenants SET asaas_subscription_id = NULL WHERE id = %s AND asaas_subscription_id = 'sub_fake_test'",

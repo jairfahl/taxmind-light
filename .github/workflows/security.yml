@@ -1,0 +1,57 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sast:
+    name: SAST — Bandit + pip-audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install security tools
+        run: pip install bandit pip-audit
+
+      - name: Bandit — static analysis (medium+ severity)
+        run: |
+          bandit -r src/ -f json -ll -o bandit-report.json || true
+          bandit -r src/ -ll
+        # -ll = medium and higher severity only
+        # falha o job apenas se houver findings HIGH ou CRITICAL
+
+      - name: Bandit — fail on HIGH/CRITICAL
+        run: |
+          bandit -r src/ -lll --exit-zero -f json -o bandit-high.json
+          python - <<'EOF'
+          import json, sys
+          with open("bandit-high.json") as f:
+              data = json.load(f)
+          issues = data.get("results", [])
+          high = [i for i in issues if i.get("issue_severity") in ("HIGH", "CRITICAL")]
+          if high:
+              print(f"FAIL: {len(high)} findings HIGH/CRITICAL encontrados:")
+              for i in high:
+                  print(f"  [{i['issue_severity']}] {i['filename']}:{i['line_number']} — {i['issue_text']}")
+              sys.exit(1)
+          print(f"OK: nenhum finding HIGH/CRITICAL ({len(issues)} total medium).")
+          EOF
+
+      - name: pip-audit — dependency CVEs
+        run: pip-audit --requirement requirements.txt --format columns
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
