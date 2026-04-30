@@ -23,11 +23,11 @@ const MESSAGES: Record<string, { titulo: string; corpo: string }> = {
 };
 
 const BENEFICIOS = [
-  "Análise RAG ilimitada com citação de fonte",
-  "Protocolo auditável P1→P6 completo",
+  "Respostas jurídicas precisas com indicação da lei consultada",
+  "Mapa de decisão com 6 passos auditáveis",
   "Simuladores IBS, CBS e Split Payment",
   "Outputs acionáveis em 5 formatos",
-  "Suporte via WhatsApp",
+  "Histórico completo de consultas e decisões",
 ];
 
 function TrialExpiradoScreen() {

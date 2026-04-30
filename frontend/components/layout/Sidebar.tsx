@@ -120,8 +120,8 @@ export function Sidebar() {
           Sistema operacional
         </div>
 
-        {/* Trial banner — visível apenas durante o período de trial */}
-        {user?.trial_ends_at && (!user.subscription_status || user.subscription_status === "trial") && (() => {
+        {/* Trial banner — visível apenas enquanto o trial ainda está ativo */}
+        {user?.trial_ends_at && (!user.subscription_status || user.subscription_status === "trial") && new Date(user.trial_ends_at) >= new Date() && (() => {
           const dias = diasRestantes(user.trial_ends_at!);
           const msg = dias === 0
             ? "Seu trial encerra hoje."
