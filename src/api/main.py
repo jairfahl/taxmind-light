@@ -58,7 +58,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from src.api.auth_api import verificar_token_api, verificar_sessao, verificar_admin, verificar_usuario_autenticado
+from src.api.auth_api import verificar_token_api, verificar_sessao, verificar_admin, verificar_usuario_autenticado, verificar_acesso_tenant
 from auth import autenticar, buscar_usuario_por_email, gerar_hash_senha, gerar_token
 from src.email_service import (
     enviar_email_confirmacao,
@@ -397,7 +397,7 @@ def _buscar_casos_similares(query: str, case_id_atual: Optional[int] = None, top
         return []
 
 
-@app.post("/v1/analyze", dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/analyze", dependencies=[Depends(verificar_acesso_tenant)])
 @limiter.limit("20/minute")
 def analyze(request: Request, req: AnalyzeRequest):
     """
@@ -1211,7 +1211,7 @@ def registrar_decisao(req: RegistrarDecisaoRequest):
 
 # --- Protocol endpoints ---
 
-@app.post("/v1/cases", status_code=201, dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/cases", status_code=201, dependencies=[Depends(verificar_acesso_tenant)])
 def criar_caso(req: CriarCasoRequest):
     """Cria um novo caso protocolar em Step 1/rascunho. Verifica limite por plano quando user_id fornecido."""
     logger.info("POST /v1/cases titulo=%s user_id=%s", req.titulo[:60], req.user_id)
@@ -1365,7 +1365,7 @@ def listar_casos(user_id: Optional[str] = Query(None)):
 
 
 @app.get("/v1/cases/{case_id}")
-def get_caso(case_id: str, current_user: dict = Depends(verificar_usuario_autenticado)):
+def get_caso(case_id: str, current_user: dict = Depends(verificar_acesso_tenant)):
     """Retorna o estado completo do caso com histórico."""
     logger.info("GET /v1/cases/%s", case_id)
     _verificar_acesso_caso(case_id, current_user.get("sub"), current_user.get("perfil"))
@@ -1379,7 +1379,7 @@ def get_caso(case_id: str, current_user: dict = Depends(verificar_usuario_autent
     return _case_estado_to_dict(estado)
 
 
-@app.post("/v1/cases/{case_id}/steps/{passo}", dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/cases/{case_id}/steps/{passo}", dependencies=[Depends(verificar_acesso_tenant)])
 def submeter_passo(case_id: str, passo: int, req: SubmeterPassoRequest):
     """
     Submete dados de um passo e avança/retrocede o protocolo.
@@ -1449,7 +1449,7 @@ def submeter_passo(case_id: str, passo: int, req: SubmeterPassoRequest):
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
 
-@app.post("/v1/cases/{case_id}/carimbo/confirmar", dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/cases/{case_id}/carimbo/confirmar", dependencies=[Depends(verificar_acesso_tenant)])
 def confirmar_carimbo(case_id: str, req: ConfirmarCarimboRequest):
     """Confirma alerta de carimbo com justificativa do gestor (mín. 20 chars)."""
     logger.info("POST /v1/cases/%s/carimbo/confirmar alert_id=%d", case_id, req.alert_id)
@@ -1523,7 +1523,7 @@ _output_engine = OutputEngine()
 # Output endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/v1/outputs", status_code=201, dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/outputs", status_code=201, dependencies=[Depends(verificar_acesso_tenant)])
 def gerar_output(req: GerarOutputRequest):
     """
     Gera um output acionável (C1–C5).
@@ -1613,7 +1613,7 @@ def gerar_output(req: GerarOutputRequest):
 
 
 @app.get("/v1/outputs/{output_id}")
-def get_output(output_id: str, current_user: dict = Depends(verificar_usuario_autenticado)):
+def get_output(output_id: str, current_user: dict = Depends(verificar_acesso_tenant)):
     """Retorna output completo com views por stakeholder."""
     logger.info("GET /v1/outputs/%s", output_id)
     _verificar_acesso_output(output_id, current_user.get("sub"), current_user.get("perfil"))
@@ -1632,7 +1632,7 @@ def get_output(output_id: str, current_user: dict = Depends(verificar_usuario_au
     return _output_result_to_dict(result)
 
 
-@app.post("/v1/outputs/{output_id}/aprovar", dependencies=[Depends(verificar_token_api)])
+@app.post("/v1/outputs/{output_id}/aprovar", dependencies=[Depends(verificar_acesso_tenant)])
 def aprovar_output(output_id: str, req: AprovarOutputRequest):
     """
     Aprova um output. Status gerado → aprovado.
@@ -1654,7 +1654,7 @@ def aprovar_output(output_id: str, req: AprovarOutputRequest):
 
 
 @app.get("/v1/cases/{case_id}/outputs")
-def listar_outputs_caso(case_id: str, current_user: dict = Depends(verificar_usuario_autenticado)):
+def listar_outputs_caso(case_id: str, current_user: dict = Depends(verificar_acesso_tenant)):
     """Lista todos os outputs de um caso, ordenados por materialidade DESC."""
     logger.info("GET /v1/cases/%s/outputs", case_id)
     _verificar_acesso_caso(case_id, current_user.get("sub"), current_user.get("perfil"))

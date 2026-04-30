@@ -16,7 +16,7 @@ import psycopg2.extras
 
 from fastapi.testclient import TestClient
 from src.api.main import app
-from src.api.auth_api import verificar_token_api, verificar_sessao, verificar_admin, verificar_usuario_autenticado
+from src.api.auth_api import verificar_token_api, verificar_sessao, verificar_admin, verificar_usuario_autenticado, verificar_acesso_tenant
 from auth import gerar_hash_senha, gerar_token, buscar_usuario_por_email, Usuario
 
 
@@ -177,6 +177,7 @@ def bypass_internal_auth():
     - verificar_sessao          → sem validação (bypass sessão)
     - verificar_admin           → retorna payload admin fake (bypass RBAC + X-Api-Key)
     - verificar_usuario_autenticado → retorna payload user fake (bypass JWT + X-Api-Key)
+    - verificar_acesso_tenant   → retorna payload user fake (bypass billing + JWT + X-Api-Key)
 
     Os testes de RBAC real devem usar um fixture separado que remova esses overrides.
     """
@@ -184,8 +185,10 @@ def bypass_internal_auth():
     app.dependency_overrides[verificar_sessao] = lambda: None
     app.dependency_overrides[verificar_admin] = lambda: _FAKE_ADMIN_PAYLOAD
     app.dependency_overrides[verificar_usuario_autenticado] = lambda: _FAKE_USER_PAYLOAD
+    app.dependency_overrides[verificar_acesso_tenant] = lambda: _FAKE_USER_PAYLOAD
     yield
     app.dependency_overrides.pop(verificar_token_api, None)
     app.dependency_overrides.pop(verificar_sessao, None)
     app.dependency_overrides.pop(verificar_admin, None)
     app.dependency_overrides.pop(verificar_usuario_autenticado, None)
+    app.dependency_overrides.pop(verificar_acesso_tenant, None)

@@ -6,6 +6,9 @@ verificar_sessao          : valida X-API-Key + session_id do JWT (usado em /v1/a
                             — garante sessão única: novo login invalida sessão anterior.
 verificar_usuario_autenticado : valida X-API-Key + JWT válido; retorna payload JWT
 verificar_admin           : valida X-API-Key + JWT com perfil ADMIN (endpoints admin)
+verificar_acesso_tenant   : valida X-API-Key + JWT + billing do tenant (endpoints de negócio)
+                            — retorna 402 se trial expirado ou assinatura cancelada/inadimplente.
+                            — ADMIN bypassa a verificação de billing.
 """
 
 import hmac
@@ -86,6 +89,55 @@ def verificar_admin(
     payload = _extrair_payload_jwt(authorization)
     if payload.get("perfil") != "ADMIN":
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    return payload
+
+
+def verificar_acesso_tenant(
+    authorization: str = Header(...),
+    x_api_key: str = Header(...),
+) -> dict:
+    """
+    FastAPI dependency: valida X-API-Key + JWT + billing do tenant.
+
+    Levanta 402 se o trial expirou ou a assinatura está cancelada/inadimplente.
+    ADMIN bypassa a verificação de billing.
+    Usado em todos os endpoints de negócio (analyze, cases, outputs).
+    """
+    from src.billing.access import tenant_tem_acesso
+
+    _validar_api_key(x_api_key)
+    payload = _extrair_payload_jwt(authorization)
+
+    if payload.get("perfil") == "ADMIN":
+        return payload
+
+    user_id = payload.get("sub")
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT t.subscription_status, t.trial_ends_at
+                   FROM users u JOIN tenants t ON t.id = u.tenant_id
+                   WHERE u.id = %s LIMIT 1""",
+                (user_id,),
+            )
+            row = cur.fetchone()
+    finally:
+        if conn:
+            put_conn(conn)
+
+    if row is None:
+        return payload  # tenant ainda não associado (onboarding incompleto) — deixar passar
+
+    tenant = {
+        "subscription_status": row[0],
+        "trial_ends_at": row[1].isoformat() if row[1] else None,
+    }
+    tem_acesso, motivo = tenant_tem_acesso(tenant)
+    if not tem_acesso:
+        raise HTTPException(status_code=402, detail=motivo)
+
     return payload
 
 
