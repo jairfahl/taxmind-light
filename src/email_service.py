@@ -250,12 +250,12 @@ def enviar_email_recuperacao_senha(email: str, nome: str, token: str) -> None:
 
 def enviar_email_trial_expirando(email: str, nome: str, dias_restantes: int) -> None:
     """
-    Envia aviso de encerramento próximo do trial (D-3 ou D-1).
+    Envia aviso de encerramento próximo do trial (D-2 ou D-1).
 
     Args:
         email          : E-mail do destinatário
         nome           : Nome do usuário
-        dias_restantes : 3 ou 1
+        dias_restantes : 2 ou 1
     """
     if not _api_configurada():
         logger.warning("RESEND_API_KEY não configurada — e-mail de trial não enviado para %s.", email)

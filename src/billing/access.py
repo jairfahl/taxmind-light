@@ -46,7 +46,7 @@ def tenant_tem_acesso(tenant: dict) -> tuple[bool, str]:
 
 def dias_restantes_trial(tenant: dict) -> int | None:
     """
-    Retorna dias restantes do trial (7 dias), ou None se não aplicável.
+    Retorna dias restantes do trial (5 dias), ou None se não aplicável.
     """
     if tenant.get("subscription_status") != "trial":
         return None

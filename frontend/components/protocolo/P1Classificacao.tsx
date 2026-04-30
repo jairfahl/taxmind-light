@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth";
 import { Card } from "@/components/shared/Card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Lightbulb } from "lucide-react";
 import api from "@/lib/api";
 
 const METODOS_SUGERIDOS = [
@@ -54,10 +55,26 @@ export function P1Classificacao() {
           <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Consulta tributária
           </label>
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1 mb-2">
+            <Lightbulb size={12} className="shrink-0 mt-0.5" />
+            Quanto mais contexto você fornecer, mais precisa será a análise.
+          </p>
+          <details className="mb-2 text-xs text-muted-foreground">
+            <summary className="cursor-pointer hover:text-foreground transition-colors">
+              Dicas para uma boa consulta
+            </summary>
+            <ul className="mt-1.5 ml-4 space-y-0.5 list-disc">
+              <li>Tipo de empresa ou contribuinte (Lucro Real, Simples Nacional, etc.)</li>
+              <li>Operação ou transação em questão</li>
+              <li>Legislação ou norma específica, se conhecida</li>
+              <li>Tributos envolvidos (IBS, CBS, ISS, IRRF, etc.)</li>
+              <li>Período fiscal relevante</li>
+            </ul>
+          </details>
           <Textarea
             value={query}
             onChange={(e) => set({ query: e.target.value })}
-            placeholder="Descreva a situação ou questão tributária que precisa ser analisada…"
+            placeholder={"Ex.: Empresa optante pelo Lucro Real realiza importação de serviços. Dúvida sobre incidência de ISS e IRRF na operação, considerando o art. 156-A da CF e a LC 214/2025..."}
             className="mt-1 min-h-28 resize-none text-sm bg-input border-border"
           />
           <p className="text-xs text-muted-foreground mt-1">{query.length} caracteres</p>

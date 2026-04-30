@@ -126,8 +126,8 @@ class TestJWT:
 class TestTrial:
 
     def test_dias_restantes_com_primeiro_uso_recente(self, usuario_comum):
-        # Primeiro uso há 2 dias → 4-5 dias restantes no trial de 7 dias
-        assert usuario_comum.dias_restantes_trial in (4, 5)
+        # Primeiro uso há 2 dias → 2-3 dias restantes no trial de 5 dias
+        assert usuario_comum.dias_restantes_trial in (2, 3)
 
     def test_dias_restantes_sem_primeiro_uso(self, usuario_sem_primeiro_uso):
         assert usuario_sem_primeiro_uso.dias_restantes_trial is None

@@ -9,6 +9,20 @@ import api from "@/lib/api";
 
 const MIN = 3;
 
+const EXEMPLOS_PREMISSAS = [
+  "Ex.: Empresa enquadrada no Lucro Real desde 2023",
+  "Ex.: Operação de venda interestadual com diferencial de alíquota",
+  "Ex.: Contribuinte possui créditos de IBS acumulados",
+  "Ex.: Regime especial de split payment ativo desde jan/2026",
+];
+
+const EXEMPLOS_RISCOS = [
+  "Ex.: Risco de autuação por classificação incorreta da operação",
+  "Ex.: Possibilidade de dupla tributação IBS/CBS na cadeia",
+  "Ex.: Perda de créditos tributários na transição para o IVA dual",
+  "Ex.: Glosa de despesas por falta de documentação fiscal",
+];
+
 function ListaEditavel({
   items,
   onChange,
@@ -93,22 +107,25 @@ export function P2Estruturacao() {
   };
 
   return (
-    <Card titulo="P2 — O que é verdade e o que te preocupa?">
+    <Card titulo="P2 — Premissas e Riscos">
       <div className="space-y-5">
         {/* Premissas */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              O que é verdade na sua situação?
+              Premissas — fatos e condições da sua situação
             </p>
             <span className={`text-xs font-semibold ${premissas.length >= MIN ? "text-emerald-600" : "text-red-500"}`}>
               {premissas.length}/{MIN} mínimo
             </span>
           </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Liste fatos concretos: tipo de empresa, regime tributário, operação, legislação aplicável.
+          </p>
           <ListaEditavel
             items={premissas}
             onChange={(v) => set({ premissas: v })}
-            placeholder="Ex: Empresa optante pelo Lucro Real com split payment…"
+            placeholder={EXEMPLOS_PREMISSAS[premissas.length % EXEMPLOS_PREMISSAS.length]}
           />
           {tentouAvancar && premissas.length < MIN && (
             <p className="text-xs text-red-600 mt-1">Adicione ao menos {MIN} premissas para continuar.</p>
@@ -117,18 +134,21 @@ export function P2Estruturacao() {
 
         {/* Riscos */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              O que você teme que aconteça?
+              Riscos — consequências que você quer avaliar
             </p>
             <span className={`text-xs font-semibold ${riscos.length >= MIN ? "text-emerald-600" : "text-red-500"}`}>
               {riscos.length}/{MIN} mínimo
             </span>
           </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Descreva riscos tributários ou operacionais: autuação, dupla tributação, perda de crédito, etc.
+          </p>
           <ListaEditavel
             items={riscos}
             onChange={(v) => set({ riscos: v })}
-            placeholder="Ex: Risco de dupla tributação IBS/CBS na cadeia…"
+            placeholder={EXEMPLOS_RISCOS[riscos.length % EXEMPLOS_RISCOS.length]}
           />
           {tentouAvancar && riscos.length < MIN && (
             <p className="text-xs text-red-600 mt-1">Adicione ao menos {MIN} riscos para continuar.</p>

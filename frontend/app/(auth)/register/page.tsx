@@ -39,7 +39,7 @@ type Form = z.infer<typeof schema>;
 const BULLETS = [
   {
     icon: <Clock size={16} className="text-blue-300" />,
-    text: "7 dias grátis — sem cartão de crédito",
+    text: "5 dias grátis — sem cartão de crédito",
   },
   {
     icon: <ShieldCheck size={16} className="text-blue-300" />,
@@ -156,7 +156,7 @@ export default function RegisterPage() {
             style={{ background: "rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.75)" }}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-            Trial gratuito · 7 dias · Sem cartão
+            Trial gratuito · 5 dias · Sem cartão
           </div>
 
           <h1 className="text-[2.8rem] font-extrabold text-white leading-[1.18] mb-5 tracking-tight">
@@ -198,7 +198,7 @@ export default function RegisterPage() {
           <div className="lg:hidden mb-8 text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Orbis.tax" style={{ height: "44px", width: "auto", margin: "0 auto 8px" }} />
-            <p className="text-sm text-slate-500">7 dias grátis · sem cartão</p>
+            <p className="text-sm text-slate-500">5 dias grátis · sem cartão</p>
           </div>
 
           {/* Card */}
@@ -242,7 +242,7 @@ export default function RegisterPage() {
                     Criar conta grátis
                   </h2>
                   <p className="text-sm" style={{ color: "#64748b" }}>
-                    7 dias de trial · sem cartão de crédito
+                    5 dias de trial · sem cartão de crédito
                   </p>
                 </div>
 

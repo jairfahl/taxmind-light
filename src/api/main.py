@@ -924,7 +924,7 @@ def deletar_norma(norma_id: int):
 # --- Limites de casos por plano (migration 128) ---
 
 _CASE_LIMITS: dict[str, int] = {
-    "trial":        3,   # total durante o período de trial
+    "trial":        1,   # total durante o período de trial
     "starter":      10,  # por mês calendário
     "professional": 50,  # por mês calendário
     "enterprise":   -1,  # ilimitado
@@ -2535,7 +2535,7 @@ def register(request: Request, req: RegisterRequest, background_tasks: Backgroun
             INSERT INTO tenants (id, cnpj_raiz, razao_social, status, plano,
                                  trial_starts_at, trial_ends_at, subscription_status)
             VALUES (%s, %s, %s, 'active', 'starter',
-                    NOW(), NOW() + INTERVAL '7 days', 'trial')
+                    NOW(), NOW() + INTERVAL '5 days', 'trial')
         """, (tenant_id, cnpj, req.razao_social))
 
         # Criar usuário (inativo até verificar e-mail)
@@ -3128,7 +3128,7 @@ def admin_create_user(req: AdminCreateUserRequest):
                 INSERT INTO tenants (id, cnpj_raiz, razao_social, status, plano,
                                      trial_starts_at, trial_ends_at, subscription_status)
                 VALUES (%s, %s, %s, 'active', 'starter',
-                        NOW(), NOW() + INTERVAL '7 days', 'trial')
+                        NOW(), NOW() + INTERVAL '5 days', 'trial')
             """, (tenant_id, str(uuid.uuid4().hex[:8]), req.nome))
 
         cur.execute("""

@@ -25,11 +25,11 @@ function diasRestantes(trialEndsAt: string): number {
 }
 
 const NAV = [
-  { href: "/analisar",          label: "Analisar",       icon: Search,    destaque: true },
-  { href: "/documentos",        label: "Documentos",     icon: FolderOpen, destaque: true },
-  { href: "/simuladores",       label: "Simuladores",    icon: BarChart2,  destaque: true },
-  { href: "/base-conhecimento", label: "Base de Normas", icon: BookOpen,   destaque: true },
-  { href: "/protocolo",         label: "Modo Avançado",  icon: GitBranch,  destaque: false },
+  { href: "/analisar",          label: "Analisar",          icon: Search,     destaque: true },
+  { href: "/protocolo",         label: "Mapa de Decisão",   icon: GitBranch,  destaque: true },
+  { href: "/documentos",        label: "Documentos",        icon: FolderOpen, destaque: true },
+  { href: "/simuladores",       label: "Simuladores",       icon: BarChart2,  destaque: true },
+  { href: "/base-conhecimento", label: "Base de Normas",    icon: BookOpen,   destaque: true },
 ];
 
 function getInitials(nome: string): string {

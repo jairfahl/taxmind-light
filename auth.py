@@ -53,13 +53,13 @@ class Usuario:
     @property
     def dias_restantes_trial(self) -> Optional[int]:
         """
-        Retorna dias restantes no período de trial de 7 dias.
+        Retorna dias restantes no período de trial de 5 dias.
         None se primeiro_uso ainda não foi registrado.
         0 se trial expirou.
         """
         if self.primeiro_uso is None:
             return None
-        expira = self.primeiro_uso + timedelta(days=7)
+        expira = self.primeiro_uso + timedelta(days=5)
         agora  = datetime.now(timezone.utc)
         delta  = (expira - agora).days
         return max(0, delta)
@@ -74,7 +74,7 @@ class Usuario:
     def data_expiracao_trial(self) -> Optional[datetime]:
         if self.primeiro_uso is None:
             return None
-        return self.primeiro_uso + timedelta(days=7)
+        return self.primeiro_uso + timedelta(days=5)
 
 
 # ─── BANCO DE DADOS ─────────────────────────────────────────────────────────────

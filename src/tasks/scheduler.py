@@ -2,7 +2,7 @@
 src/tasks/scheduler.py — Jobs diários de retenção de usuários (anti-churn).
 
 Jobs:
-  check_trial_expiring   — 09h00 UTC: e-mail D-3 e D-1 do trial
+  check_trial_expiring   — 09h00 UTC: e-mail D-2 e D-1 do trial
   check_inactive_tenants — 09h30 UTC: e-mail "sentimos sua falta" (14 dias sem análise)
 
 Inicializado no lifespan da FastAPI (main.py).
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def check_trial_expiring() -> None:
     """
-    Verifica trials próximos do vencimento e envia e-mails D-3 e D-1.
+    Verifica trials próximos do vencimento e envia e-mails D-2 e D-1.
     Cada e-mail é enviado apenas uma vez (rastreado pelas colunas *_sent_at).
     O trial NÃO é prorrogado — e-mails são apenas avisos.
     """
@@ -55,15 +55,15 @@ def check_trial_expiring() -> None:
 
             dias = (trial_ends_at.date() - agora.date()).days
 
-            if dias == 3 and d3_sent is None:
-                enviar_email_trial_expirando(email, nome, 3)
+            if dias == 2 and d3_sent is None:
+                enviar_email_trial_expirando(email, nome, 2)
                 with conn.cursor() as cur:
                     cur.execute(
                         "UPDATE tenants SET trial_d3_email_sent_at = NOW() WHERE id = %s",
                         (tenant_id,),
                     )
                 conn.commit()
-                logger.info("[scheduler] E-mail D-3 enviado para tenant %s (%s)", tenant_id, email)
+                logger.info("[scheduler] E-mail D-2 enviado para tenant %s (%s)", tenant_id, email)
 
             elif dias == 1 and d1_sent is None:
                 enviar_email_trial_expirando(email, nome, 1)
