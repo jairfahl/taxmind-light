@@ -43,7 +43,7 @@ import re
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -3125,9 +3125,15 @@ def admin_list_users(
         rows = cur.fetchall()
         cur.close()
 
+        agora = datetime.now(timezone.utc)
         users = []
         for r in rows:
             trial_ends = r[10]
+            sub_status = r[9]
+            if sub_status == "trial" and trial_ends is not None:
+                te = trial_ends if trial_ends.tzinfo else trial_ends.replace(tzinfo=timezone.utc)
+                if agora > te:
+                    sub_status = "trial_expired"
             users.append({
                 "id":                 str(r[0]),
                 "email":              r[1],
@@ -3138,7 +3144,7 @@ def admin_list_users(
                 "primeiro_uso":       r[6].isoformat() if r[6] else None,
                 "email_verificado":   r[7],
                 "empresa":            r[8],
-                "subscription_status": r[9],
+                "subscription_status": sub_status,
                 "trial_ends_at":      trial_ends.isoformat() if trial_ends else None,
             })
         return {"users": users, "total": len(users)}

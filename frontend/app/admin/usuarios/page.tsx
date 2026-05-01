@@ -110,10 +110,11 @@ export default function UsuariosAdminPage() {
 
   const statusBadge = (status: string | null) => {
     const map: Record<string, { label: string; color: string }> = {
-      trial:    { label: "Trial",     color: "#f59e0b" },
-      active:   { label: "Ativo",     color: "#10b981" },
-      past_due: { label: "Atrasado",  color: "#ef4444" },
-      canceled: { label: "Cancelado", color: "#6b7280" },
+      trial:         { label: "Trial",          color: "#f59e0b" },
+      trial_expired: { label: "Trial Expirado", color: "#ef4444" },
+      active:        { label: "Ativo",          color: "#10b981" },
+      past_due:      { label: "Atrasado",       color: "#ef4444" },
+      canceled:      { label: "Cancelado",      color: "#6b7280" },
     };
     const s = map[status ?? ""] ?? { label: status ?? "—", color: "#9ca3af" };
     return (
