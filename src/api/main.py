@@ -780,7 +780,7 @@ def ingest_upload(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Arquivo a ingerir (PDF, DOCX, XLSX, HTML, TXT, MD, CSV)"),
     nome: str = Form(..., description="Nome do documento (ex: IN RFB 2184/2024)"),
-    tipo: str = Form(..., description="Tipo: IN | Resolucao | Parecer | Manual | Decreto"),
+    tipo: str = Form(..., description="Tipo: IN | Resolucao | Portaria | Parecer | Manual | Decreto"),
 ):
     """
     Ingestão assíncrona de documento. Retorna job_id para polling via GET /v1/ingest/jobs/{job_id}.
