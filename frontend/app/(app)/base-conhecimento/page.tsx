@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 
-const TIPOS = ["IN", "Resolucao", "Portaria", "Parecer", "Manual", "Decreto"];
+const TIPOS = ["IN", "Resolucao", "Portaria", "Parecer", "Manual", "Decreto", "Lei"];
 const EXTENSOES = ".pdf,.docx,.xlsx,.html,.htm,.txt,.md,.csv";
 
 interface NormaRow {
