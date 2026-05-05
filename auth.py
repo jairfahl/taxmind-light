@@ -16,11 +16,9 @@ from dataclasses import dataclass
 import psycopg2
 import psycopg2.extras
 
-# ─── CONFIGURAÇÃO ──────────────────────────────────────────────────────────────
+from src.db.pool import get_conn, put_conn
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise EnvironmentError("DATABASE_URL não configurada")
+# ─── CONFIGURAÇÃO ──────────────────────────────────────────────────────────────
 
 # Chave secreta para assinar JWT.
 # Obrigatório: definir JWT_SECRET como variável de ambiente.
@@ -79,10 +77,6 @@ class Usuario:
 
 # ─── BANCO DE DADOS ─────────────────────────────────────────────────────────────
 
-def _get_connection():
-    return psycopg2.connect(DATABASE_URL)
-
-
 def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
     """
     Busca usuário no banco pelo email.
@@ -99,7 +93,8 @@ def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
         WHERE email = %s
         LIMIT 1;
     """
-    with _get_connection() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (email.lower().strip(),))
             row = cur.fetchone()
@@ -116,6 +111,8 @@ def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
                 tenant_id=str(row["tenant_id"]) if row["tenant_id"] else None,
                 session_id=str(row["session_id"]) if row["session_id"] else None,
             )
+    finally:
+        put_conn(conn)
 
 
 def buscar_usuario_por_id(user_id: str) -> Optional[Usuario]:
@@ -134,7 +131,8 @@ def buscar_usuario_por_id(user_id: str) -> Optional[Usuario]:
         WHERE id = %s
         LIMIT 1;
     """
-    with _get_connection() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (user_id,))
             row = cur.fetchone()
@@ -150,6 +148,8 @@ def buscar_usuario_por_id(user_id: str) -> Optional[Usuario]:
                 criado_em=row["criado_em"],
                 tenant_id=str(row["tenant_id"]) if row["tenant_id"] else None,
             )
+    finally:
+        put_conn(conn)
 
 
 def buscar_senha_hash(email: str) -> Optional[str]:
@@ -158,11 +158,14 @@ def buscar_senha_hash(email: str) -> Optional[str]:
     Separado de buscar_usuario_por_email por segurança.
     """
     sql = "SELECT senha_hash FROM users WHERE email = %s LIMIT 1;"
-    with _get_connection() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, (email.lower().strip(),))
             row = cur.fetchone()
             return row[0] if row else None
+    finally:
+        put_conn(conn)
 
 
 def registrar_primeiro_uso(user_id: str) -> None:
@@ -179,10 +182,13 @@ def registrar_primeiro_uso(user_id: str) -> None:
         WHERE id = %s
           AND primeiro_uso IS NULL;
     """
-    with _get_connection() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, (user_id,))
         conn.commit()
+    finally:
+        put_conn(conn)
 
 
 # ─── SENHA ──────────────────────────────────────────────────────────────────────
@@ -315,10 +321,13 @@ def autenticar(email: str, senha: str) -> tuple[Optional[str], Optional[str]]:
 
     # 6. Regenerar session_id — invalida qualquer sessão anterior
     novo_session_id = str(uuid.uuid4())
-    with _get_connection() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute("UPDATE users SET session_id = %s WHERE id = %s", (novo_session_id, usuario.id))
         conn.commit()
+    finally:
+        put_conn(conn)
     usuario.session_id = novo_session_id
 
     # 7. Gerar token

@@ -10,14 +10,14 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Request: injeta Bearer token + X-API-Key (SEC-08) ────────────────────
+// ── Request: injeta Bearer token ──────────────────────────────────────────
+// X-API-Key removida do browser (era NEXT_PUBLIC_* → exposta no JS bundle).
+// Autenticação do browser é feita exclusivamente via JWT no header Authorization.
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("tribus_token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
-  const apiKey = process.env.NEXT_PUBLIC_API_INTERNAL_KEY;
-  if (apiKey) config.headers["X-Api-Key"] = apiKey;
   return config;
 });
 

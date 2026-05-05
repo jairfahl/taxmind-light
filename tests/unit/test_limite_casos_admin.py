@@ -32,10 +32,10 @@ def _call_limite(user_id: str, conn_mock):
     """Chama get_limite_casos com banco mockado."""
     from src.api.main import get_limite_casos
 
-    with patch("src.api.main.get_conn", return_value=conn_mock), \
-         patch("src.api.main.put_conn"), \
-         patch("src.api.main._get_tenant_info_by_user", return_value=None), \
-         patch("src.api.main._verificar_limite_casos"):
+    with patch("src.api.routers.auth.get_conn", return_value=conn_mock), \
+         patch("src.api.routers.auth.put_conn"), \
+         patch("src.api.routers.auth._get_tenant_info_by_user", return_value=None), \
+         patch("src.api.routers.auth._verificar_limite_casos"):
         return get_limite_casos(user_id=user_id)
 
 

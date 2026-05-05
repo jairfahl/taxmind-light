@@ -1,14 +1,19 @@
 """
 src/api/auth_api.py — Dependencies de autenticação da FastAPI.
 
-verificar_token_api       : valida X-API-Key interno (todos os endpoints protegidos)
-verificar_sessao          : valida X-API-Key + session_id do JWT (usado em /v1/auth/me)
-                            — garante sessão única: novo login invalida sessão anterior.
-verificar_usuario_autenticado : valida X-API-Key + JWT válido; retorna payload JWT
-verificar_admin           : valida X-API-Key + JWT com perfil ADMIN (endpoints admin)
-verificar_acesso_tenant   : valida X-API-Key + JWT + billing do tenant (endpoints de negócio)
+verificar_token_api       : aceita X-API-Key (server-to-server) OU JWT válido (browser)
+verificar_sessao          : valida session_id do JWT (garante sessão única)
+verificar_usuario_autenticado : JWT válido; retorna payload JWT
+verificar_admin           : JWT com perfil ADMIN
+verificar_acesso_tenant   : JWT + billing do tenant
                             — retorna 402 se trial expirado ou assinatura cancelada/inadimplente.
                             — ADMIN bypassa a verificação de billing.
+
+NOTA DE SEGURANÇA (SEC-08 revisado 2026-05):
+X-API-Key era exposta via NEXT_PUBLIC_API_INTERNAL_KEY no bundle JS do browser.
+Solução: todas as dependências aceitam X-API-Key OU JWT válido.
+- Requests do browser: enviam apenas JWT (X-Api-Key removida do frontend)
+- Requests server-to-server (webhooks, scripts): enviam X-Api-Key
 """
 
 import hmac
@@ -35,7 +40,7 @@ def _validar_api_key(x_api_key: str) -> None:
         raise HTTPException(status_code=401, detail="Não autorizado.")
 
 
-def _extrair_payload_jwt(authorization: str) -> dict:
+def _extrair_payload_jwt(authorization: Optional[str]) -> dict:
     """
     Extrai e valida o payload do JWT no header Authorization.
 
@@ -50,42 +55,61 @@ def _extrair_payload_jwt(authorization: str) -> dict:
     return payload
 
 
-def verificar_token_api(x_api_key: str = Header(...)):
-    """
-    FastAPI dependency: valida o header X-API-Key.
+def _jwt_valido(authorization: Optional[str]) -> bool:
+    """Retorna True se Authorization contém um JWT decodificável e não expirado."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return False
+    token = authorization.split(" ", 1)[1]
+    return decodificar_token(token) is not None
 
-    Levanta 401 se a chave estiver ausente ou incorreta.
-    Levanta RuntimeError (500) se API_INTERNAL_KEY não estiver configurada no ambiente.
+
+def verificar_token_api(
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+):
     """
-    _validar_api_key(x_api_key)
+    FastAPI dependency: aceita X-API-Key (server-to-server) OU JWT válido (browser).
+
+    - X-API-Key presente: validado via comparação constant-time.
+    - JWT presente (sem X-API-Key): aceito se decodificável e não expirado.
+    - Nenhum dos dois: 401.
+    """
+    if x_api_key:
+        _validar_api_key(x_api_key)
+        return
+    if _jwt_valido(authorization):
+        return
+    raise HTTPException(status_code=401, detail="Não autorizado.")
 
 
 def verificar_usuario_autenticado(
-    authorization: str = Header(...),
-    x_api_key: str = Header(...),
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
 ) -> dict:
     """
-    FastAPI dependency: valida X-API-Key + JWT válido.
+    FastAPI dependency: valida JWT válido; retorna payload JWT.
 
-    Retorna o payload JWT (inclui sub, email, perfil, session_id).
-    Usado em endpoints que precisam identificar o usuário/tenant chamador.
+    X-API-Key é opcional — validada se presente (server-to-server).
+    JWT é obrigatório para identificar o usuário.
     """
-    _validar_api_key(x_api_key)
+    if x_api_key:
+        _validar_api_key(x_api_key)
     return _extrair_payload_jwt(authorization)
 
 
 def verificar_admin(
-    authorization: str = Header(...),
-    x_api_key: str = Header(...),
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
 ) -> dict:
     """
-    FastAPI dependency: valida X-API-Key + JWT com perfil ADMIN.
+    FastAPI dependency: valida JWT com perfil ADMIN.
 
-    Retorna o payload JWT se válido e perfil == 'ADMIN'.
+    X-API-Key é opcional — validada se presente.
     Levanta 403 se o usuário não for ADMIN.
     Usado em todos os endpoints /v1/admin/* e DELETE /v1/ingest/normas/.
     """
-    _validar_api_key(x_api_key)
+    if x_api_key:
+        _validar_api_key(x_api_key)
     payload = _extrair_payload_jwt(authorization)
     if payload.get("perfil") != "ADMIN":
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
@@ -93,19 +117,20 @@ def verificar_admin(
 
 
 def verificar_acesso_tenant(
-    authorization: str = Header(...),
-    x_api_key: str = Header(...),
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
 ) -> dict:
     """
-    FastAPI dependency: valida X-API-Key + JWT + billing do tenant.
+    FastAPI dependency: valida JWT + billing do tenant.
 
     Levanta 402 se o trial expirou ou a assinatura está cancelada/inadimplente.
     ADMIN bypassa a verificação de billing.
-    Usado em todos os endpoints de negócio (analyze, cases, outputs).
+    X-API-Key é opcional — validada se presente (server-to-server).
     """
     from src.billing.access import tenant_tem_acesso
 
-    _validar_api_key(x_api_key)
+    if x_api_key:
+        _validar_api_key(x_api_key)
     payload = _extrair_payload_jwt(authorization)
 
     if payload.get("perfil") == "ADMIN":
@@ -143,26 +168,27 @@ def verificar_acesso_tenant(
 
 def verificar_sessao(
     authorization: Optional[str] = Header(None),
-    x_api_key: str = Header(...),
+    x_api_key: Optional[str] = Header(None),
 ):
     """
-    FastAPI dependency: valida X-API-Key + session_id do JWT.
+    FastAPI dependency: valida session_id do JWT.
 
     Usado em /v1/auth/me para garantir sessão única por usuário.
     Se um segundo login ocorrer, o session_id do banco muda e o JWT antigo
     retorna 401 com detail='session_expired' na próxima chamada a este endpoint.
 
+    X-API-Key é opcional — validada se presente (server-to-server).
     Tolerância de transição: JWTs emitidos antes de 2026-05-01 sem session_id
     ainda são aceitos. JWTs mais novos sem session_id → 401.
     """
-    # 1. Validar X-API-Key (constant-time)
-    _validar_api_key(x_api_key)
+    if x_api_key:
+        _validar_api_key(x_api_key)
 
-    # 2. Se não há JWT no header Authorization, tolerar (best-effort)
+    # Se não há JWT, tolerar (best-effort — verificar_token_api já validou)
     if not authorization or not authorization.startswith("Bearer "):
         return
 
-    # 3. Decodificar JWT
+    # Decodificar JWT
     token = authorization.split(" ", 1)[1]
     payload = decodificar_token(token)
     if not payload or not payload.get("session_id"):
@@ -173,7 +199,7 @@ def verificar_sessao(
             raise HTTPException(status_code=401, detail="Sessão inválida. Faça login novamente.")
         return  # JWT antigo sem session_id — tolerar
 
-    # 4. Comparar session_id do JWT com o session_id atual no banco
+    # Comparar session_id do JWT com o session_id atual no banco
     user_id = payload.get("sub")
     jwt_session_id = payload.get("session_id")
 
