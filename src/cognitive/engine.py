@@ -555,6 +555,7 @@ def _chamar_llm(
     fatos_cliente: Optional[dict] = None,
     _escalated: bool = False,
     tenant_id: Optional[str] = None,
+    trace=None,
 ) -> dict:
     """Chama o LLM e retorna o JSON parseado.
 
@@ -609,12 +610,16 @@ def _chamar_llm(
 
     max_tokens = MODEL_OUTPUT_LIMITS.get(model, 8192)
 
-    resp = client.messages.create(
+    _t_llm = time.time()
+    from src.resilience.backoff import resilient_call, ANTHROPIC_LLM_CONFIG
+    resp = resilient_call(
+        client.messages.create,
         model=model,
         max_tokens=max_tokens,
         temperature=temperatura,
         system=system,
         messages=[{"role": "user", "content": user_msg}],
+        config=ANTHROPIC_LLM_CONFIG,
     )
 
     # Registrar consumo de tokens
@@ -629,6 +634,11 @@ def _chamar_llm(
         )
     except Exception as _usage_err:
         logger.debug("Registro de uso ignorado: %s", _usage_err)
+
+    if trace is not None:
+        trace.record("llm_call", int((time.time() - _t_llm) * 1000),
+                     {"model": model, "input_tokens": resp.usage.input_tokens,
+                      "output_tokens": resp.usage.output_tokens})
 
     # Detectar truncamento antes de tentar parse
     if resp.stop_reason == "max_tokens":
@@ -900,15 +910,52 @@ def analisar(
 
     t0 = time.time()
     conn = _get_db_conn()
+    from src.observability.tracer import TraceContext
+    from src.resilience.cache import _query_cache, make_cache_key
+    from src.outputs.engine import BASE_VERSION as _BASE_VERSION
+    trace = TraceContext.create(query)
+
+    # Cache: apenas queries FACTUAL sem contexto personalizado
+    _query_tipo = classificar_query(query)
+    _cacheable = (
+        _query_tipo.value == "FACTUAL"
+        and not contexto_caso
+        and not fatos_cliente
+        and not decompose
+    )
+    if _cacheable:
+        _cache_key = make_cache_key(query, norma_filter, model, _BASE_VERSION)
+        _cached = _query_cache.get(_cache_key)
+        if _cached is not None:
+            trace.record("cache_hit", 0, {"key": _cache_key[:8]})
+            try:
+                trace.emit()
+            except Exception:
+                pass
+            put_conn(conn)
+            return _cached
+    else:
+        _cache_key = None
+
     try:
-        return _analisar_inner(conn, query, top_k, rerank_top_n, norma_filter,
-                               excluir_tipos, model, decompose, t0, contexto_caso,
-                               casos_similares, user_id,
-                               metodos_selecionados=metodos_selecionados,
-                               premissas=premissas,
-                               riscos_fiscais=riscos_fiscais,
-                               fatos_cliente=fatos_cliente)
+        resultado = _analisar_inner(conn, query, top_k, rerank_top_n, norma_filter,
+                                    excluir_tipos, model, decompose, t0, contexto_caso,
+                                    casos_similares, user_id,
+                                    metodos_selecionados=metodos_selecionados,
+                                    premissas=premissas,
+                                    riscos_fiscais=riscos_fiscais,
+                                    fatos_cliente=fatos_cliente,
+                                    trace=trace)
+        # Armazenar no cache se qualidade não for VERMELHO
+        if _cacheable and _cache_key and resultado.qualidade.status.value != "VERMELHO":
+            _query_cache.put(_cache_key, resultado)
+            trace.record("cache_miss", 0, {"key": _cache_key[:8], "stored": True})
+        return resultado
     finally:
+        try:
+            trace.emit()
+        except Exception:
+            pass
         put_conn(conn)
 
 
@@ -929,22 +976,32 @@ def _analisar_inner(
     premissas: Optional[list[str]] = None,
     riscos_fiscais: Optional[list[str]] = None,
     fatos_cliente: Optional[dict] = None,
+    trace=None,
 ) -> AnaliseResult:
     """Corpo interno do pipeline de análise (chamado por analisar com try/finally)."""
-    # Resolver tenant_id a partir do user_id para rastreio de consumo
+    # Resolver tenant_id e plano a partir do user_id
     _tenant_id: Optional[str] = None
+    _plano: Optional[str] = None
     if user_id:
         try:
             with conn.cursor() as _tcur:
                 _tcur.execute(
-                    "SELECT tenant_id FROM users WHERE id = %s LIMIT 1",
+                    """SELECT t.id, t.plano FROM users u
+                       JOIN tenants t ON t.id = u.tenant_id
+                       WHERE u.id = %s LIMIT 1""",
                     (user_id,),
                 )
                 _trow = _tcur.fetchone()
                 if _trow:
                     _tenant_id = str(_trow[0])
+                    _plano = _trow[1]
         except Exception as _te:
-            logger.debug("Falha ao resolver tenant_id para user %s: %s", user_id, _te)
+            logger.debug("Falha ao resolver tenant para user %s: %s", user_id, _te)
+
+    # Token budget: verificar limite diário antes do pipeline
+    if _tenant_id:
+        from src.billing.token_budget import verificar_budget_tenant
+        verificar_budget_tenant(_tenant_id, _plano, conn)
 
     # PTF — Pre-filter Temporal: extrair data de referência da query
     data_ref = extrair_data_referencia(query)
@@ -981,6 +1038,7 @@ def _analisar_inner(
                         cosine_weight=p.cosine_weight, bm25_weight=p.bm25_weight,
                         data_referencia=data_ref, tenant_id=_tenant_id)
 
+    _t_retrieve = time.time()
     if decisao.strategy == SPDStrategy.SPD:
         # SPD: retrieval per-document
         spd_result = spd_retrieve(
@@ -1006,6 +1064,10 @@ def _analisar_inner(
             chunks = _do_retrieve(query)
     else:
         chunks = _do_retrieve(query)
+
+    if trace is not None:
+        trace.record("retrieve", int((time.time() - _t_retrieve) * 1000),
+                     {"strategy": decisao.strategy.value, "output_count": len(chunks)})
 
     # P1.5-P2 — CRAG + Adaptive Tools + Quality Gate
     # Loop Depth (ACT-inspired): queries complexas recebem até N iterações de retrieval.
@@ -1124,7 +1186,12 @@ def _analisar_inner(
                 logger.warning("HyDE ignorado: %s", e)
 
         # P2 — Quality Gate
+        _t_qg = time.time()
         qualidade = avaliar_qualidade(query, chunks)
+        if trace is not None:
+            trace.record("quality_gate", int((time.time() - _t_qg) * 1000),
+                         {"iteration": _iter_n, "status": qualidade.status.value,
+                          "chunks": len(chunks)})
 
         # RS-02 reactive (apenas na iter 1 — evitar SPD duplo)
         if (_iter_n == 1
@@ -1223,7 +1290,7 @@ def _analisar_inner(
                         casos_similares=casos_similares,
                         metodos_selecionados=metodos_selecionados,
                         premissas=premissas, riscos_fiscais=riscos_fiscais,
-                        fatos_cliente=fatos_cliente, tenant_id=_tenant_id)
+                        fatos_cliente=fatos_cliente, tenant_id=_tenant_id, trace=trace)
 
     # Ativar CoT se necessário e re-chamar
     if _precisa_cot(qualidade, dados):
@@ -1236,6 +1303,7 @@ def _analisar_inner(
                             fatos_cliente=fatos_cliente, tenant_id=_tenant_id)
 
     # P4 — Anti-alucinação
+    _t_anti = time.time()
     anti = AntiAlucinacaoResult()
     all_flags: list[str] = []
 
@@ -1282,6 +1350,10 @@ def _analisar_inner(
         anti.bloqueado = True
 
     anti.flags = all_flags
+    if trace is not None:
+        trace.record("anti_hallucination", int((time.time() - _t_anti) * 1000),
+                     {"m1": m1_ok, "m2": m2_ok, "m3": m3_ok, "m4": m4_ok,
+                      "bloqueado": anti.bloqueado, "flags": all_flags})
 
     # Disclaimer final: combinar qualidade + M2
     disclaimer = dados.get("disclaimer")

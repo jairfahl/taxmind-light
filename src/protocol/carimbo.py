@@ -38,17 +38,10 @@ def _get_voyage() -> voyageai.Client:
 
 
 def _embed(texto: str) -> list[float]:
+    from src.resilience.backoff import resilient_call, VOYAGE_CARIMBO_CONFIG
     client = _get_voyage()
-    delays = [30, 60]
-    for tentativa in range(3):
-        try:
-            result = client.embed([texto], model=EMBEDDING_MODEL)
-            return result.embeddings[0]
-        except voyageai.error.RateLimitError:
-            if tentativa < 2:
-                time.sleep(delays[tentativa])
-            else:
-                raise
+    result = resilient_call(client.embed, [texto], model=EMBEDDING_MODEL, config=VOYAGE_CARIMBO_CONFIG)
+    return result.embeddings[0]
 
 
 def _cosseno(v1: list[float], v2: list[float]) -> float:

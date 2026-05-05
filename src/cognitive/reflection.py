@@ -107,7 +107,7 @@ class ReflectionLoop:
             partes.append(f"[{i}] {c.norma_codigo} | {artigo}\n{c.texto[:400]}")
         return "\n\n".join(partes)
 
-    def _criticar(self, analise: AnaliseResult) -> CriticaResult:
+    def _criticar(self, analise: AnaliseResult, trace=None) -> CriticaResult:
         """Submete a recomendação a uma crítica LLM."""
         client = self._get_client()
         prompt = _PROMPT_CRITICA.format(
@@ -119,11 +119,14 @@ class ReflectionLoop:
             grau_consolidacao=analise.grau_consolidacao,
         )
 
-        resp = client.messages.create(
+        from src.resilience.backoff import resilient_call, ANTHROPIC_REFLECTION_CONFIG
+        resp = resilient_call(
+            client.messages.create,
             model=self._model,
             max_tokens=512,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
+            config=ANTHROPIC_REFLECTION_CONFIG,
         )
         raw = resp.content[0].text.strip()
         if raw.startswith("```"):

@@ -55,33 +55,21 @@ def _get_db_conn() -> psycopg2.extensions.connection:
 
 def _embed_query(query: str, tenant_id: str | None = None) -> list[float]:
     """Gera embedding da query via voyage-3 com retry em rate limit."""
+    from src.resilience.backoff import resilient_call, VOYAGE_QUERY_CONFIG
     client = _get_voyage_client()
-    delays = [2, 5, 10]
-    for tentativa in range(3):
-        try:
-            result = client.embed([query], model=EMBEDDING_MODEL)
-            # Registrar consumo de tokens
-            try:
-                from src.observability.usage import registrar_uso
-                total_tokens = getattr(result, 'total_tokens', 0) or len(query.split()) * 2
-                registrar_uso(
-                    service="voyageai",
-                    model=EMBEDDING_MODEL,
-                    input_tokens=total_tokens,
-                    tenant_id=tenant_id,
-                )
-            except Exception:
-                pass
-            return result.embeddings[0]
-        except voyageai.error.RateLimitError as e:
-            if tentativa < 2:
-                logger.warning("Rate limit na query. Aguardando %ds...", delays[tentativa])
-                time.sleep(delays[tentativa])
-            else:
-                raise RuntimeError(f"Rate limit persistente ao embeddar query: {e}") from e
-        except Exception as e:
-            raise RuntimeError(f"Erro ao gerar embedding da query: {e}") from e
-    return []
+    result = resilient_call(client.embed, [query], model=EMBEDDING_MODEL, config=VOYAGE_QUERY_CONFIG)
+    try:
+        from src.observability.usage import registrar_uso
+        total_tokens = getattr(result, "total_tokens", 0) or len(query.split()) * 2
+        registrar_uso(
+            service="voyageai",
+            model=EMBEDDING_MODEL,
+            input_tokens=total_tokens,
+            tenant_id=tenant_id,
+        )
+    except Exception:
+        pass
+    return result.embeddings[0]
 
 
 @dataclass
@@ -106,6 +94,7 @@ def retrieve(
     bm25_weight: float = 0.3,
     data_referencia: Optional[date] = None,
     tenant_id: str | None = None,
+    trace=None,
 ) -> list[ChunkResultado]:
     """
     Recupera os chunks mais relevantes para a query.

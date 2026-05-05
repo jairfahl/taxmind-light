@@ -114,6 +114,7 @@ class CorrectorRAG:
         query: str,
         chunks: list[ChunkResultado],
         retrieve_fn=None,
+        trace=None,
     ) -> CorrectorResult:
         """
         Filtra chunks por relevância semântica.

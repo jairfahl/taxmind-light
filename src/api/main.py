@@ -461,6 +461,18 @@ def analyze(request: Request, req: AnalyzeRequest):
             fatos_cliente=req.fatos_cliente or {},
         )
     except Exception as e:
+        from src.billing.token_budget import TokenBudgetExceeded
+        if isinstance(e, TokenBudgetExceeded):
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "daily_token_budget_exceeded",
+                    "detail": "Limite de análises atingido para hoje. Redefine às 00:00 UTC.",
+                    "usage": e.usage,
+                    "limit": e.limit,
+                    "plan": e.plan,
+                },
+            )
         logger.error("Erro interno em /v1/analyze: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
 
@@ -549,11 +561,19 @@ def health():
         if conn:
             put_conn(conn)
 
+    cache_stats = {}
+    try:
+        from src.resilience.cache import _query_cache
+        cache_stats = _query_cache.stats
+    except Exception:
+        pass
+
     return {
         "status": "ok",
         "chunks_total": chunks_total,
         "embeddings_total": embeddings_total,
         "normas": normas,
+        "cache_stats": cache_stats,
     }
 
 
@@ -1393,6 +1413,50 @@ def get_limite_consultas(user_id: str = Query(...)):
         return {"usado": usado, "limite": limite, "subscription_status": sub_status}
     except Exception as e:
         logger.error("Erro em /v1/consultas/limite: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
+    finally:
+        if conn:
+            put_conn(conn)
+
+
+@app.get("/v1/billing/token-usage", dependencies=[Depends(verificar_token_api)])
+def get_token_usage(user_id: str = Query(...)):
+    """Retorna consumo diário de tokens e limite do plano para o tenant."""
+    logger.info("GET /v1/billing/token-usage user_id=%s", user_id)
+    conn = None
+    try:
+        conn = get_conn()
+        row = _get_tenant_info_by_user(user_id, conn)
+        if not row:
+            return {
+                "hoje": {"input_tokens": 0, "output_tokens": 0, "estimated_cost": 0.0},
+                "limite": {"daily_cost_usd": 1.00},
+                "percentual": 0,
+                "subscription_status": "trial",
+                "plano": "trial",
+            }
+        t_id, sub_status, plano, _trial_ends = row
+        tenant_id = str(t_id)
+
+        from src.billing.token_budget import PLAN_LIMITS, obter_uso_diario_tenant
+        uso = obter_uso_diario_tenant(tenant_id, conn)
+        _plano = (plano or "trial").lower()
+        limits = PLAN_LIMITS.get(_plano, PLAN_LIMITS["trial"])
+        limite_custo = limits.get("daily_cost_usd")
+
+        percentual = 0
+        if limite_custo:
+            percentual = min(100, int(uso["estimated_cost"] / limite_custo * 100))
+
+        return {
+            "hoje": uso,
+            "limite": {"daily_cost_usd": limite_custo},
+            "percentual": percentual,
+            "subscription_status": sub_status,
+            "plano": _plano,
+        }
+    except Exception as e:
+        logger.error("Erro em /v1/billing/token-usage: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
     finally:
         if conn:

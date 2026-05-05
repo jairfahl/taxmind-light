@@ -49,43 +49,20 @@ def _get_client() -> voyageai.Client:
 
 def _embed_batch_com_retry(textos: list[str]) -> list[list[float]]:
     """Gera embeddings com retry agressivo em rate limit."""
+    from src.resilience.backoff import resilient_call, VOYAGE_INGEST_CONFIG
     client = _get_client()
-    for tentativa in range(MAX_RETRIES):
-        try:
-            result = client.embed(textos, model=EMBEDDING_MODEL)
-            # Registrar consumo de tokens
-            try:
-                from src.observability.usage import registrar_uso
-                total_tokens = getattr(result, 'total_tokens', 0) or sum(len(t.split()) * 2 for t in textos)
-                registrar_uso(
-                    service="voyageai",
-                    model=EMBEDDING_MODEL,
-                    input_tokens=total_tokens,
-                )
-            except Exception:
-                pass
-            return result.embeddings
-        except voyageai.error.RateLimitError as e:
-            delay = RATELIMIT_DELAYS[min(tentativa, len(RATELIMIT_DELAYS) - 1)]
-            logger.warning(
-                "Rate limit atingido. Aguardando %ds (tentativa %d/%d)",
-                delay, tentativa + 1, MAX_RETRIES
-            )
-            if tentativa < MAX_RETRIES - 1:
-                time.sleep(delay)
-            else:
-                raise RuntimeError(
-                    f"Rate limit persistente após {MAX_RETRIES} tentativas. "
-                    "Adicione método de pagamento em https://dashboard.voyageai.com/"
-                ) from e
-        except Exception as e:
-            if tentativa < MAX_RETRIES - 1:
-                delay = 10 * (tentativa + 1)
-                logger.warning("Erro API: %s. Aguardando %ds", e, delay)
-                time.sleep(delay)
-            else:
-                raise RuntimeError(f"Erro API após {MAX_RETRIES} tentativas: {e}") from e
-    return []
+    result = resilient_call(client.embed, textos, model=EMBEDDING_MODEL, config=VOYAGE_INGEST_CONFIG)
+    try:
+        from src.observability.usage import registrar_uso
+        total_tokens = getattr(result, "total_tokens", 0) or sum(len(t.split()) * 2 for t in textos)
+        registrar_uso(
+            service="voyageai",
+            model=EMBEDDING_MODEL,
+            input_tokens=total_tokens,
+        )
+    except Exception:
+        pass
+    return result.embeddings
 
 
 def _chunks_ja_com_embedding(conn: psycopg2.extensions.connection, chunk_ids: list[int]) -> set[int]:
@@ -169,4 +146,13 @@ def gerar_e_persistir_embeddings(
     elapsed = time.time() - t_inicio
     logger.info("  Embedding concluído: %d inseridos em %.1fs", total_inseridos, elapsed)
     cursor.close()
+
+    # Invalidar cache de queries após nova ingestão
+    if total_inseridos > 0:
+        try:
+            from src.resilience.cache import _query_cache
+            _query_cache.invalidate_all()
+        except Exception as _ce:
+            logger.debug("Cache invalidation ignorada: %s", _ce)
+
     return total_inseridos
