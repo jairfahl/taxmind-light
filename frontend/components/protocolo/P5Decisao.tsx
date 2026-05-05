@@ -87,8 +87,7 @@ export function P5Decisao() {
       <Card titulo="P5 — O que você vai fazer?">
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Registre a decisão tomada. O Orbis calculará a similaridade com a análise
-            e ativará o detector de terceirização cognitiva se necessário.
+            Registre a decisão tomada. O Orbis verificará se ela está alinhada com os riscos e fundamentos identificados na análise e alertará caso haja divergência relevante.
           </p>
           <Textarea
             value={decisaoFinal}

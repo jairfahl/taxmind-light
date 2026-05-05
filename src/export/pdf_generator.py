@@ -136,6 +136,7 @@ def _build_context_dossie(output: dict, case: Optional[dict] = None, tenant_info
     # Passos P1→P6 a partir do conteúdo estruturado
     passos = []
     if is_dossie and isinstance(conteudo, dict):
+        # Formato primário: chaves p1..p6 ou passo_1..passo_6
         for num in range(1, 7):
             chave = f"p{num}"
             texto = conteudo.get(chave) or conteudo.get(f"passo_{num}")
@@ -145,6 +146,35 @@ def _build_context_dossie(output: dict, case: Optional[dict] = None, tenant_info
                     "label": STEP_LABELS.get(num, f"Passo {num}"),
                     "texto": texto,
                 })
+
+        # Fallback: formato flat gerado por engine.gerar_dossie
+        # (chaves: premissas, periodo_fiscal, hipotese_gestor, recomendacao, decisao_final, decisor)
+        if not passos:
+            def _lista(v):
+                if isinstance(v, list):
+                    return " | ".join(str(i) for i in v if i)
+                return str(v) if v else ""
+
+            _flat = [
+                (1, " | ".join(filter(None, [
+                    conteudo.get("titulo_caso", ""),
+                    _lista(conteudo.get("premissas", [])),
+                    f"Período: {conteudo['periodo_fiscal']}" if conteudo.get("periodo_fiscal") else "",
+                ]))),
+                (4, conteudo.get("hipotese_gestor", "")),
+                (5, " | ".join(filter(None, [
+                    conteudo.get("recomendacao", ""),
+                    conteudo.get("decisao_final", ""),
+                    f"Decisor: {conteudo['decisor']}" if conteudo.get("decisor") else "",
+                ]))),
+            ]
+            for num, texto in _flat:
+                if texto and texto.strip():
+                    passos.append({
+                        "num": num,
+                        "label": STEP_LABELS.get(num, f"Passo {num}"),
+                        "texto": texto,
+                    })
 
     # Conteúdo textual para não-dossiês
     conteudo_principal = ""
