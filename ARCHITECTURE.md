@@ -1,5 +1,5 @@
 # Orbis.tax — Architecture Reference
-**Versão:** 3.1
+**Versão:** 3.2
 **Atualizado em:** Maio 2026
 **Mantido por:** PO (Jair)
 
@@ -96,8 +96,20 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 │   └── Dockerfile                ← Multi-stage build (node:20-alpine)
 ├── src/
 │   ├── api/
-│   │   ├── main.py               ← FastAPI — 40+ endpoints REST
-│   │   └── auth_api.py           ← Dependencies: verificar_token_api (X-Api-Key), verificar_usuario_autenticado (JWT), verificar_acesso_tenant (billing enforcement → HTTP 402)
+│   │   ├── main.py               ← FastAPI app entry point (~143 linhas): lifespan, CORS, limiter, healthcheck, include_router ×9
+│   │   ├── auth_api.py           ← Dependencies: verificar_token_api (X-Api-Key), verificar_usuario_autenticado (JWT), verificar_acesso_tenant (billing enforcement → HTTP 402)
+│   │   ├── helpers.py            ← Helpers compartilhados: _get_tenant_info_by_user, _verificar_limite_casos
+│   │   ├── limiter.py            ← Instância slowapi Limiter (singleton compartilhado entre routers)
+│   │   └── routers/              ← 9 routers modulares (extraídos do monolítico main.py — Plano v1.0 T5)
+│   │       ├── auth.py           ← /v1/auth/* (login, register, forgot/reset-password, verify-email, me, onboarding)
+│   │       ├── analyze.py        ← /v1/analyze, /v1/chunks
+│   │       ├── cases.py          ← /v1/cases/* (CRUD + steps + carimbo)
+│   │       ├── outputs.py        ← /v1/outputs/* + /v1/export/pdf
+│   │       ├── ingest.py         ← /v1/upload, /v1/check-duplicate, /v1/ingest/jobs/*
+│   │       ├── observability.py  ← /v1/observability/* + /v1/monitor/*
+│   │       ├── billing.py        ← /v1/billing/* + /v1/webhooks/asaas + /v1/mau
+│   │       ├── admin.py          ← /v1/admin/* (metricas, tenants, users, mailing, consumo)
+│   │       └── simuladores.py    ← /v1/simuladores/* (5 simuladores RT)
 │   ├── cognitive/
 │   │   ├── engine.py             ← Orquestração cognitiva principal
 │   │   ├── criticidade.py        ← Classificação de criticidade 3 níveis (G17)
@@ -230,7 +242,10 @@ brasileira (EC 132/2023, LC 214/2025, LC 227/2026).
 | `frontend/components/layout/AuthGuard.tsx` | Redireciona não-autenticados para /login | Zero rendering de conteúdo |
 | `frontend/lib/api.ts` | Instância axios com `Authorization: Bearer` + `X-Api-Key` em todos os requests | Zero lógica de domínio |
 | `frontend/store/auth.ts` | Estado global de auth (user, token) com persistência localStorage | Zero chamadas diretas à API |
-| `src/api/main.py` | 40+ endpoints REST, validação, serialização, rate limiting (slowapi) | Zero lógica de domínio — delega ao engine |
+| `src/api/main.py` | App entry point: lifespan (APScheduler), CORS, limiter, healthcheck, inclui 9 routers modulares via `include_router` | Zero lógica de domínio — toda lógica de negócio nos routers |
+| `src/api/routers/` | 9 routers: auth, analyze, cases, outputs, ingest, observability, billing, admin, simuladores — cada um com seus endpoints, schemas Pydantic e validações | Zero lógica cruzada entre routers |
+| `src/api/helpers.py` | Helpers compartilhados entre routers: `_get_tenant_info_by_user`, `_verificar_limite_casos` | Zero endpoints |
+| `src/api/limiter.py` | Singleton `Limiter` do slowapi — importado pelos routers que precisam de rate limiting | Zero lógica de negócio |
 | `src/api/auth_api.py` | Dependencies: `verificar_token_api` (X-Api-Key), `verificar_usuario_autenticado` (JWT), `verificar_acesso_tenant` (billing — HTTP 402 se trial expirado/cancelado/inadimplente; ADMIN bypassa) | Zero lógica tributária |
 | `src/email_service.py` | Envio de e-mail transacional via Resend: verificação, recuperação de senha, trial D-3/D-1, falha de pagamento, inatividade 14 dias | Zero lógica de negócio |
 | `src/tasks/scheduler.py` | APScheduler jobs diários de retenção: check_trial_expiring (D-3/D-1), check_inactive_tenants (14 dias sem análise) | Zero lógica tributária |
@@ -340,7 +355,7 @@ Constantes em `engine.py`: `_QUALITY_MAX_ITER`, `_QUALITY_TOPK_SCALE`.
 
 ### Gate de Qualidade
 - **RDMs da Onda 1.5 estão implementados** (HyDE, Multi-Query, Step-Back, Context Budget, Lockfile). Não reimplementar.
-- **786+ testes devem passar** após qualquer modificação (referência 2026-04-30: 762 originais + 24 novos em test_prompt_sanitizer.py).
+- **799+ testes devem passar** após qualquer modificação (referência 2026-05-05: 799 passando pós router extraction + fix test_export_pdf; 4 falhas adversariais pré-existentes em test_adversarial_sprint3; novos arquivos de stress em `tests/stress/` e `tests/integration/test_security_manual.py`/`test_resilience.py`/`test_stress_pipeline.py` — executados separadamente com `pytest -m integration`).
   - Comando: `.venv/bin/python -m pytest tests/unit/ tests/integration/ tests/linters/ -v --tb=short`
   - Zero novas regressões toleradas — qualquer falha nova deve ser corrigida antes de entregar
   - Linters AST: `tests/linters/` — 12 testes (embedding lock, P4 guard, citation contract, PTF)
@@ -483,6 +498,16 @@ Se a implementação exigir tocar arquivo fora do escopo declarado: **parar e re
 | AGENTS.md + CLAUDE.md — índice de skills completo | ✅ Maio 2026 | 4 novos skills adicionados ao índice: new-test, new-endpoint, review-security, debug-regression. CLAUDE.md v3.1: seção ÍNDICE DE SKILLS E HOOKS adicionada |
 | Landing page — plano Pro "Em breve" | ✅ Maio 2026 | Preço R$990/mês removido; plano Pro mostra "Em breve" com features listadas; descrição de retrieval expandida para incluir toda a base de atos normativos indexados |
 | pdf_generator.py — tenant_nome sem fallback | ✅ Maio 2026 | `tenant_nome` não usa mais "Orbis.tax" como fallback — usa string vazia; PDF exibe apenas o nome real do tenant cadastrado |
+| main.py router extraction — Plano v1.0 T5 | ✅ Maio 2026 | `src/api/main.py` 3.768 linhas → 143 linhas; 9 routers em `src/api/routers/*.py`; helpers em `helpers.py`; limiter em `limiter.py`; backwards-compat re-exports para testes que patcham via `src.api.main.*` |
+| P5 copy update — linguagem de negócio | ✅ Maio 2026 | `P5Decisao.tsx`: "detector de terceirização cognitiva" → "verificará se ela está alinhada com os riscos e fundamentos identificados na análise" |
+| PDF dossiê fix — formato flat-key | ✅ Maio 2026 | `pdf_generator._build_context_dossie`: adicionado fallback para chaves planas (`premissas`, `hipotese_gestor`, `recomendacao`, `decisao_final`) quando `p1`–`p6` ausentes — formato usado por `engine.gerar_dossie` |
+| Cases DB zerado em produção | ✅ Maio 2026 | `TRUNCATE cases CASCADE` em prod: zerando cases, case_steps, case_state_history, carimbo_alerts, outputs, output_stakeholders, output_aprovacoes, monitoramento_p6, heuristicas. Base de conhecimento (chunks, embeddings, normas) e ai_interactions intactos |
+| Plano v1.0 — tasks T1–T8 concluídas | ✅ Maio 2026 | auth.py→pool (T1), API key exposure fix (T2), APScheduler lock (T3), gzip nginx (T4), router extraction (T5), CSP hardening (T6), streamlit removido (T7), deps atualizadas (T8) |
+| Backup VPS — Hostinger Snapshots diários | ✅ Maio 2026 | Backup automático do VPS completo (~52 GB) ativo no painel Hostinger (orbis.vps); cobre SO + volumes Docker (taxmind_pgdata) + configs; armazenado separadamente; restauração ~1h44m. Débito D-02 fechado |
+| Gate U2 Stress Testing concluído | ✅ Maio 2026 | 6 fases executadas com Locust + OWASP + resiliência + soak 2h. Resultados: 16.602 req / 0 falhas no soak; API recovery 4s; DB recovery 12s; RAM estável 422 MB. Fase 1.1 (LLM load ~$10-20) adiada para após 10 users pagantes. Infraestrutura: `tests/stress/`, `tests/integration/test_security_manual.py`, `tests/integration/test_resilience.py`, `tests/integration/test_stress_pipeline.py`, `scripts/stress_baseline.sh`, `scripts/stress_monitor.sh` |
+| SEC: UUID inválido em cases/{id} retornava 500 | ✅ Maio 2026 | Bug descoberto na Fase 4 (OWASP). `GET /v1/cases/uuid-invalido` lançava `psycopg2.errors.InvalidTextRepresentation` não tratado → 500. Corrigido com `_validar_uuid()` em `src/api/routers/cases.py` antes de qualquer DB query — retorna 404 |
+| SEC: PromptInjectionError em /v1/analyze retornava 500 | ✅ Maio 2026 | Bug descoberto na Fase 4 (OWASP). `PromptInjectionError` levantada dentro de `CognitiveEngine.analisar()` era capturada pelo `except Exception` genérico do router → 500. Corrigido com `isinstance(e, PromptInjectionError)` check antes do handler genérico → 400 `PROMPT_INJECTION_DETECTED` |
+| Stop hook simplificado — git status → IN_PROGRESS.md | ✅ Maio 2026 | Hook `scripts/hooks/stop_regression_gate.sh` era pytest completo (~90s). Substituído por git status + git diff --name-only gravados em `docs/IN_PROGRESS.md` (~1s) — pytest completo deve ser rodado manualmente antes de commit |
 
 ---
 

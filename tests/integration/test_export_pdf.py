@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
-from src.api.main import app, verificar_acesso_tenant
+from src.api.main import app
+from src.api.auth_api import verificar_acesso_tenant
 from tests.integration.conftest import _FAKE_USER_PAYLOAD
 
 

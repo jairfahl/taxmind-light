@@ -1,5 +1,5 @@
 # Orbis.tax — Instruções para Claude Code
-**Versão:** 3.1 | **Atualizado em:** Maio 2026
+**Versão:** 3.2 | **Atualizado em:** Maio 2026
 
 > Lido automaticamente pelo Claude Code a cada sessão. Não remover.
 
@@ -123,8 +123,22 @@ Pipeline: `PTF → Adaptive → SPD → Retrieve → CRAG → [MQ|SB|HyDE] → Q
 | **Infra hardening — guard file + host nginx + redeploy pre-flight** | ✅ Maio 2026 |
 | **Skills index completo — 10 skills em AGENTS.md + CLAUDE.md** | ✅ Maio 2026 |
 | **Landing page — plano Pro "Em breve" + pdf_generator tenant_nome sem fallback** | ✅ Maio 2026 |
+| **Plano v1.0 — T1 auth.py→pool + T3 APScheduler lock + T4 gzip nginx** | ✅ Maio 2026 |
+| **Plano v1.0 — T2 API key exposure fix (NEXT_PUBLIC removido do bundle)** | ✅ Maio 2026 |
+| **Plano v1.0 — T5 router extraction — main.py 3.768→143 linhas, 9 routers em src/api/routers/** | ✅ Maio 2026 |
+| **Plano v1.0 — T6 CSP hardening + T7 streamlit removido + T8 deps atualizadas** | ✅ Maio 2026 |
+| **P5 copy — "detector de terceirização cognitiva" → linguagem de negócio** | ✅ Maio 2026 |
+| **PDF dossiê fix — fallback flat-key (premissas/hipotese_gestor/decisao_final)** | ✅ Maio 2026 |
+| **Cases DB zerado em produção — TRUNCATE cases CASCADE (base de conhecimento intacta)** | ✅ Maio 2026 |
+| **Gate U2 Stress Testing — Locust + OWASP + resiliência + soak (piped-humming-bengio.md)** | ✅ Maio 2026 |
+| **SEC: UUID inválido em /v1/cases/{id} retornava 500 → corrigido para 404** | ✅ Maio 2026 |
+| **SEC: PromptInjectionError em /v1/analyze retornava 500 → corrigido para 400** | ✅ Maio 2026 |
+| **Stop hook simplificado — era pytest completo (~90s), agora git status (~1s)** | ✅ Maio 2026 |
 
-- **Suite de testes:** 786 passando (762 originais + 24 novos test_prompt_sanitizer), ~10 falhas conhecidas pré-existentes (referência 2026-04-30)
+- **Suite de testes:** 799 passando (referência 2026-05-05); 4 falhas adversariais pré-existentes conhecidas (test_adversarial_sprint3)
+- **Stress testing:** `tests/stress/` (Locust) + `tests/integration/test_security_manual.py` + `test_resilience.py` + `test_stress_pipeline.py`
+- **Gate U2 resultado:** 0 falhas em 16.602 req soak 2h; recovery API=4s, DB=12s; RAM estável
+- **Fase 1.1 pendente:** load test com LLM — adiado para após 10 users pagantes
 - **Linters AST:** `tests/linters/` — 12 testes: embedding lock, P4 guard, citation contract, PTF
 - **Última migration:** `134_rls_api_usage.sql` → próxima: `135_...`
 
@@ -138,7 +152,7 @@ Pipeline: `PTF → Adaptive → SPD → Retrieve → CRAG → [MQ|SB|HyDE] → Q
 |-------|-------------|
 | `new-feature.md` | Qualquer feature nova |
 | `new-migration.md` | ALTER TABLE / CREATE TABLE |
-| `new-endpoint.md` | Rota nova em `src/api/main.py` |
+| `new-endpoint.md` | Rota nova em `src/api/routers/*.py` |
 | `new-test.md` | Qualquer módulo Python novo |
 | `pre-deploy.md` | Antes de git push para produção |
 | `diagnose-bug.md` | Bug em produção |

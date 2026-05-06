@@ -1,6 +1,6 @@
 # LESSONS_LEARNED.md
 # Orbis.tax — Lições Aprendidas
-**Versão:** 1.5
+**Versão:** 1.6
 **Atualizado em:** Maio 2026
 **Autor:** PO (Jair Fahl) + Claude
 **Localização:** `/Users/jairfahl/Downloads/orbis.tax/LESSONS_LEARNED.md`
@@ -432,7 +432,7 @@ Atualizar esta tabela quando um item for fechado.
 | # | Débito | Risco | Gatilho para resolver |
 |---|---|---|---|
 | ~~D-01~~ | ~~SEC-09: BYPASS_AUTH=False~~ | ~~Segurança crítica em produção~~ | ✅ **Fechado Abril 2026** — FastAPI ativo não tem BYPASS_AUTH |
-| ~~D-02~~ | ~~Backup automatizado do `taxmind_pgdata`~~ | ~~Perda irreversível de dados~~ | ✅ **Fechado Abril 2026** — `scripts/backup_db.sh` criado |
+| ~~D-02~~ | ~~Backup automatizado do `taxmind_pgdata`~~ | ~~Perda irreversível de dados~~ | ✅ **Fechado Maio 2026** — Hostinger Snapshots automáticos diários ativados (VPS completo ~52 GB, cobre todos os volumes Docker) |
 | ~~D-03~~ | ~~SEC-10: IDs sequenciais → UUID em cases/outputs~~ | ~~Enumeração e segurança~~ | ✅ **Fechado Abril 2026** — migration 126 aplicada em prod; cases.id e outputs.id são UUID |
 | D-04 | Corpus Manager sem responsável formal | Desatualização silenciosa do corpus | Ao atingir 10 clientes pagantes |
 | D-05 | Tab Consultar com resposta mais rasa que Protocolo | Qualidade inconsistente | Aplicar PROMPT_DIAGNOSTICO antes do lançamento |
@@ -550,6 +550,59 @@ O corpus desatualizado, sim.
 - nginx do host é gerenciado pelo repo (`nginx/host-nginx-orbis.tax.conf`) — nunca nginx container em produção em VPS compartilhada
 - `redeploy.sh` tem pre-flight checks obrigatórios (`.env.prod`, vars, nginx ativo, nenhum container em 80/443) e post-deploy verification (containers running, API health, SSL cert, acesso externo)
 - O único comando de deploy válido em produção é: `bash redeploy.sh`
+
+---
+
+## 16. LIÇÕES DE MAIO 2026 (Plano v1.0 — Router Extraction + PDF Fix)
+
+### [Maio 2026] — mock.patch target precisa apontar para onde o nome está vinculado, não onde foi definido
+**O que aconteceu:** `tests/unit/test_limite_casos_admin.py` patchava `src.api.main.get_conn` e `src.api.main._get_tenant_info_by_user`. Após a extração dos routers (T5), `get_conn` passou a ser chamado por código em `src.api.routers.auth`, e o patch em `src.api.main` não interceptava mais a chamada real. O teste falhava com `psycopg2.errors.InvalidTextRepresentation: invalid input syntax for type uuid: "admin-uuid"` — a chamada real ao banco acontecia.
+**Custo:** 1 ciclo extra de diagnóstico + correção dos targets no teste.
+**Regra derivada:** `unittest.mock.patch("modulo.A.funcao")` intercepta o nome `funcao` no namespace de `modulo.A`. Se `funcao` foi importada de outro módulo, o patch deve ser no módulo que importou, não no módulo de origem. Ao mover código de módulo (refactoring), verificar todos os patches nos testes que referenciavam o módulo antigo.
+
+### [Maio 2026] — backwards-compat re-exports em main.py para testes existentes
+**O que aconteceu:** Ao extrair routers de `main.py`, vários testes importavam ou patchavam símbolos via `src.api.main.*` (`_analise_to_dict`, `get_limite_casos`, `_get_tenant_info_by_user`). Após a extração, esses símbolos não existiam mais em `main.py` → `ImportError` nos testes.
+**Solução usada:** Adicionar re-exports no rodapé de `main.py`:
+```python
+from src.api.routers.analyze import _analise_to_dict          # noqa: F401
+from src.api.routers.auth import get_limite_casos              # noqa: F401
+from src.api.helpers import _get_tenant_info_by_user, _verificar_limite_casos  # noqa: F401
+```
+**Regra derivada:** Ao extrair código de um módulo que é importado por testes, manter re-exports de compatibilidade no módulo original até que todos os imports sejam migrados. Prefixar com `# noqa: F401` para silenciar linters.
+
+### [Maio 2026] — PDF dossiê: engine.gerar_dossie usa chaves planas, não p1–p6
+**O que aconteceu:** `pdf_generator._build_context_dossie` esperava `conteudo["p1"]`…`conteudo["p6"]` para montar os passos do dossiê. Mas `engine.gerar_dossie` salva `conteudo` com chaves planas: `premissas`, `periodo_fiscal`, `hipotese_gestor`, `recomendacao`, `decisao_final`, `decisor`. O PDF gerava apenas cabeçalho (título, materialidade, disclaimer, hash) sem nenhum corpo.
+**Custo:** Usuário reportou PDF vazio após criação de caso. 1 ciclo de diagnóstico.
+**Regra derivada:** Antes de assumir o formato de um dado persistido no banco, verificar como o código que escreve esse dado (engine, protocol, etc.) realmente o estrutura. O formato de entrada do display layer (PDF, frontend) deve ser compatível com o formato de saída da camada de persistência. Usar fallbacks defensivos quando há dois formatos possíveis.
+
+### [Maio 2026] — TRUNCATE cases CASCADE em produção: heuristicas também foi zerada
+**O que aconteceu:** `TRUNCATE cases CASCADE` zerou também a tabela `heuristicas` (não esperado). A tabela `heuristicas` tem FK para `cases` — o CASCADE acertou.
+**Custo:** Zero — o zerar foi intencional e heuristicas estava vazia em prod. Mas o comportamento não foi antecipado.
+**Regra derivada:** Antes de executar `TRUNCATE t CASCADE` em produção, rodar `SELECT conname, conrelid::regclass, confrelid::regclass FROM pg_constraint WHERE confrelid = 'cases'::regclass AND contype = 'f'` para listar TODAS as tabelas que referenciam a tabela alvo via FK. Apenas então confirmar com o PO que o cascade é aceitável para cada tabela listada.
+
+---
+
+## 17. LIÇÕES DE MAIO 2026 (Gate U2 — Stress Testing)
+
+### [Maio 2026] — nginx roteia a API via prefixo `/api/`, não `/v1/` diretamente
+**O que aconteceu:** Durante o stress testing, todos os locustfiles e testes de segurança apontavam para `/v1/health`, `/v1/analyze` etc. A API retornava o HTML do Next.js (200 com body HTML). O nginx do host roteia `location /api/ { proxy_pass http://api:8000/; }` — ou seja, `/api/v1/analyze` → `api:8000/v1/analyze`. A rota `/v1/` direto vai para o Next.js.
+**Custo:** Todos os arquivos de stress e segurança criados tiveram os paths corrigidos de `/v1/` para `/api/v1/`.
+**Regra derivada:** Ao criar qualquer cliente HTTP externo (locust, httpx, curl) que acessa `https://orbis.tax`, **sempre** usar o prefixo `/api/v1/` e não `/v1/` diretamente. O nginx expõe a API em `/api/`, não na raiz. `curl https://orbis.tax/v1/health` retorna HTML. `curl https://orbis.tax/api/v1/health` retorna JSON.
+
+### [Maio 2026] — PromptInjectionError não estava no except chain do router — retornava 500
+**O que aconteceu:** `src/security/prompt_sanitizer.py` levanta `PromptInjectionError` dentro de `CognitiveEngine.analisar()`. O router `analyze.py` tinha `except Exception as e: raise HTTPException(500, ...)` como handler genérico — e não verificava o tipo específico antes. Resultado: qualquer tentativa de injection retornava 500 em vez de 400.
+**Custo:** Bug de segurança: atacker recebia 500 (que pode vazar informação sobre stack interno) em vez de 400 (resposta limpa). Descoberto via teste OWASP LLM01 no Gate U2.
+**Regra derivada:** Ao adicionar qualquer exceção de domínio nova (`PromptInjectionError`, `TokenBudgetExceeded`, etc.) que pode ser levantada dentro de chamadas de serviço, **verificar todos os routers** que chamam esse serviço e adicionar `isinstance(e, MinhaExcecao)` **antes** do `except Exception` genérico. A ordem importa — o handler genérico captura tudo se vier primeiro.
+
+### [Maio 2026] — Parâmetros de path UUID sem validação explodem com 500 interno
+**O que aconteceu:** `GET /v1/cases/nao-e-um-uuid` chegava ao banco com `case_id = "nao-e-um-uuid"`, o psycopg2 tentava converter para UUID e levantava `psycopg2.errors.InvalidTextRepresentation` — não tratado → 500. OWASP Test T3 falhou nesse ponto.
+**Custo:** Exposição desnecessária de erro interno de banco. Corrigido com `_validar_uuid()` que checa `uuid.UUID(case_id)` antes de qualquer DB query — 404 limpo.
+**Regra derivada:** Todo endpoint com `{case_id}` ou `{output_id}` como parâmetro de path **deve** ter validação UUID **antes** da primeira chamada ao banco. Padrão: `try: uuid.UUID(id_param) except ValueError: raise HTTPException(404, "Não encontrado.")`. Usar 404 (não 422) para evitar revelar que o formato é UUID.
+
+### [Maio 2026] — Stop hook de pytest completo bloqueava o fluxo de trabalho por ~90s
+**O que aconteceu:** O hook `Stop` rodava `pytest tests/ -q` completo a cada fim de sessão — ~90 segundos de bloqueio antes de encerrar. O PO reportou que estava "demorando muito" e o ritmo de trabalho ficava interrompido.
+**Custo:** Perda de fluidez no trabalho. O hook era mais lento que qualquer valor que entregava.
+**Regra derivada:** Hooks de evento (`PreToolUse`, `PostToolUse`, `Stop`) devem ser `< 5s`. Gate de qualidade (pytest) deve ser rodado **manualmente** antes de commit — não automaticamente no Stop. O hook Stop útil: atualizar `docs/IN_PROGRESS.md` com git status/diff em ~1s para manter contexto entre sessões.
 
 ---
 

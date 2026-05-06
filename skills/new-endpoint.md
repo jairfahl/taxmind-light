@@ -4,17 +4,27 @@
 
 ```
 1. Migration SQL (se tocar banco) → ver skills/new-migration.md
-2. Implementar endpoint em src/api/main.py
-3. Teste em tests/integration/test_[feature]_endpoint.py
-4. Atualizar ARCHITECTURE.md §6 (Endpoints) se rota nova pública
+2. Identificar o router correto em src/api/routers/ (auth, analyze, cases, outputs, ingest, observability, billing, admin, simuladores)
+3. Implementar endpoint no router adequado
+4. Teste em tests/integration/test_[feature]_endpoint.py
+5. Atualizar ARCHITECTURE.md §10 se decisão arquitetural relevante
 ```
 
 ## Template de Endpoint
 
 ```python
-@app.post("/v1/[recurso]", dependencies=[Depends(verificar_acesso_tenant)])
+# No arquivo src/api/routers/[modulo].py
+from fastapi import APIRouter, Depends, HTTPException, Request
+from src.api.limiter import limiter
+from src.api.auth_api import verificar_acesso_tenant, verificar_usuario_autenticado
+from src.api.helpers import _get_tenant_info_by_user
+from src.db.pool import get_conn, put_conn
+
+router = APIRouter()  # já existente no arquivo
+
+@router.post("/v1/[recurso]", dependencies=[Depends(verificar_acesso_tenant)])
 @limiter.limit("20/minute")
-def meu_endpoint(request: Request, req: MeuRequest):
+def meu_endpoint(request: Request, req: MeuRequest, current_user: dict = Depends(verificar_acesso_tenant)):
     """
     Descrição do endpoint.
     Retorna 400 se [condição de erro].

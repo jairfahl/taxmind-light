@@ -1,7 +1,7 @@
 # Orbis.tax — AGENTS.md
 **Produto:** RAG de inteligência tributária (Reforma Tributária brasileira)
 **Raiz:** `/Users/jairfahl/Downloads/orbis.tax/`
-**API:** `src/api/main.py` (FastAPI, porta 8020)
+**API:** `src/api/main.py` (FastAPI entry point, porta 8020) + `src/api/routers/*.py` (9 routers)
 **UI:** `frontend/` (Next.js 16 App Router, porta 3000 dev / 8521 Docker)
 
 ---

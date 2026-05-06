@@ -1,5 +1,5 @@
 # Contexto da última sessão Claude Code
-**Atualizado:** 2026-05-06 10:11:37
+**Atualizado:** 2026-05-06 10:48:09
 
 ## Branch atual
 main
@@ -11,8 +11,7 @@ CLAUDE.md
 LESSONS_LEARNED.md
 Tribus-AI/Docs/Orbis_Roadmap_v3.docx
 docs/DEPLOY_REFERENCE.md
-requirements-dev.txt
-scripts/hooks/stop_regression_gate.sh
+docs/IN_PROGRESS.md
 skills/new-endpoint.md
 tests/integration/test_export_pdf.py
 
@@ -23,8 +22,7 @@ tests/integration/test_export_pdf.py
  M LESSONS_LEARNED.md
  D Tribus-AI/Docs/Orbis_Roadmap_v3.docx
  M docs/DEPLOY_REFERENCE.md
- M requirements-dev.txt
- M scripts/hooks/stop_regression_gate.sh
+ M docs/IN_PROGRESS.md
  M skills/new-endpoint.md
  M tests/integration/test_export_pdf.py
 ?? .claude/
@@ -37,3 +35,4 @@ tests/integration/test_export_pdf.py
 ?? Tribus-AI/Docs/Orbis_Plano_Marketing_v1.docx
 ?? "Tribus-AI/Docs/Orbis_Politica_Privacidade_v1_1 - Alt.docx"
 ?? Tribus-AI/Docs/Orbis_Posts_LinkedIn_v1_0.docx
+?? Tribus-AI/Docs/Orbis_Roadmap_v4.docx
