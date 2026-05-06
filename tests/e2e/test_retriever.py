@@ -1,8 +1,10 @@
 """
-tests/unit/test_retriever.py — testes unitários do motor de retrieval.
+tests/e2e/test_retriever.py — testes de integração do motor de retrieval.
 
-Executa com: pytest tests/unit/test_retriever.py -v
-Requer banco e embeddings populados (run_ingest.py executado).
+REQUER banco populado e embeddings indexados (run_ingest.py executado).
+Executar manualmente: pytest tests/e2e/test_retriever.py -v
+
+NÃO roda na suite principal (tests/unit/) — depende de infraestrutura real.
 """
 
 import pytest
@@ -53,13 +55,8 @@ def test_ordenados_por_score_final():
 # Teste 4 — norma_filter retorna apenas chunks da norma especificada
 # ---------------------------------------------------------------------------
 def test_norma_filter():
-    """
-    Verifica que o filtro por norma é aplicado sem erro.
-    Resultados podem ser 0 quando embeddings são mockados (similaridade baixa).
-    """
     norma = "LC214_2025"
     resultados = retrieve("IBS", top_k=3, norma_filter=[norma])
-    # Com embeddings mockados ([0.1]*1024), similaridade pode ser baixa → 0 resultados é aceitável
     assert isinstance(resultados, list)
     for r in resultados:
         assert r.norma_codigo == norma, (

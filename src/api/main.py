@@ -16,7 +16,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -25,8 +24,6 @@ from slowapi.errors import RateLimitExceeded
 from src.api.limiter import limiter
 from src.db.pool import get_conn, put_conn
 
-load_dotenv()
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -34,10 +31,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app):
     from src.tasks.scheduler import create_scheduler
+    from src.db.pool import close_pool
     scheduler = create_scheduler()
     scheduler.start()
     yield
     scheduler.shutdown()
+    close_pool()
 
 
 _is_dev = os.getenv("ENV") == "dev"
@@ -63,12 +62,6 @@ app.add_middleware(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-@app.on_event("shutdown")
-def _shutdown_pool():
-    from src.db.pool import close_pool
-    close_pool()
 
 
 # --- Health check ---
