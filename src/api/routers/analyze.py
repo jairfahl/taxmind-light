@@ -165,6 +165,7 @@ def analyze(request: Request, req: AnalyzeRequest):
         )
     except Exception as e:
         from src.billing.token_budget import TokenBudgetExceeded
+        from src.security.prompt_sanitizer import PromptInjectionError
         if isinstance(e, TokenBudgetExceeded):
             raise HTTPException(
                 status_code=429,
@@ -175,6 +176,11 @@ def analyze(request: Request, req: AnalyzeRequest):
                     "limit": e.limit,
                     "plan": e.plan,
                 },
+            )
+        if isinstance(e, PromptInjectionError):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "PROMPT_INJECTION_DETECTED", "message": str(e)},
             )
         logger.error("Erro interno em /v1/analyze: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Erro interno. Tente novamente.")
