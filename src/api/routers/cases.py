@@ -10,6 +10,7 @@ GET  /v1/cases/{case_id}/outputs
 """
 
 import logging
+import uuid as _uuid_mod
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -226,10 +227,18 @@ def listar_casos(user_id: Optional[str] = Query(None)):
             put_conn(conn)
 
 
+def _validar_uuid(case_id: str) -> None:
+    try:
+        _uuid_mod.UUID(case_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Caso não encontrado.")
+
+
 @router.get("/v1/cases/{case_id}")
 def get_caso(case_id: str, current_user: dict = Depends(verificar_acesso_tenant)):
     """Retorna o estado completo do caso com histórico."""
     logger.info("GET /v1/cases/%s", case_id)
+    _validar_uuid(case_id)
     _verificar_acesso_caso(case_id, current_user.get("sub"), current_user.get("perfil"))
     try:
         estado = _protocol_engine.get_estado(case_id)
@@ -248,6 +257,7 @@ def submeter_passo(case_id: str, passo: int, req: SubmeterPassoRequest):
     No Step 5 (Decidir), executa DetectorCarimbo automaticamente se dados contiverem
     'decisao_final' e 'recomendacao'.
     """
+    _validar_uuid(case_id)
     logger.info("POST /v1/cases/%s/steps/%d acao=%s", case_id, passo, req.acao)
     try:
         if req.acao == "voltar":
@@ -314,6 +324,7 @@ def submeter_passo(case_id: str, passo: int, req: SubmeterPassoRequest):
 @router.post("/v1/cases/{case_id}/carimbo/confirmar", dependencies=[Depends(verificar_acesso_tenant)])
 def confirmar_carimbo(case_id: str, req: ConfirmarCarimboRequest):
     """Confirma alerta de carimbo com justificativa do gestor (mín. 20 chars)."""
+    _validar_uuid(case_id)
     logger.info("POST /v1/cases/%s/carimbo/confirmar alert_id=%d", case_id, req.alert_id)
     try:
         _carimbo_detector.confirmar(req.alert_id, req.justificativa)
@@ -330,6 +341,7 @@ def confirmar_carimbo(case_id: str, req: ConfirmarCarimboRequest):
 @router.get("/v1/cases/{case_id}/outputs")
 def listar_outputs_caso(case_id: str, current_user: dict = Depends(verificar_acesso_tenant)):
     """Lista todos os outputs de um caso, ordenados por materialidade DESC."""
+    _validar_uuid(case_id)
     logger.info("GET /v1/cases/%s/outputs", case_id)
     _verificar_acesso_caso(case_id, current_user.get("sub"), current_user.get("perfil"))
     try:
